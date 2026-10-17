@@ -53,6 +53,18 @@ Remote-Datenbank-URL ausgeführt werden.
 Neue Schema- oder Policy-Änderungen kommen immer als zusätzliche Migration hinzu. Vorhandene,
 bereits veröffentlichte Migrationen werden nicht nachträglich umgeschrieben.
 
+## Datenbanktests
+
+Die Tests unter `supabase/tests/` prüfen Datenbankregeln wie Row-Level Security gegen die lokale
+Supabase-Instanz. Nach dem lokalen Start werden sie aus `backend/` ausgeführt:
+
+```sh
+npx supabase test db
+```
+
+Die Testdaten laufen in Transaktionen und werden danach zurückgerollt. Der Befehl verwendet nur die
+lokale Datenbank; Tests niemals mit einer Remote-Datenbank-URL starten.
+
 ## Verzeichnisstruktur
 
 ```text
@@ -61,8 +73,11 @@ backend/
 └── supabase/
     ├── config.toml
     ├── migrations/
-    │   └── 20261017000000_remote_schema.sql
-    └── functions/
+    │   ├── 20261017000000_remote_schema.sql
+    │   └── 20261017190000_harden_coach_request_rls.sql
+    ├── functions/
+    └── tests/
+        └── coach_requests_rls.test.sql
 ```
 
 Der Ordner `functions/` wird angelegt, sobald eine Edge Function im Repository umgesetzt wird. Er
