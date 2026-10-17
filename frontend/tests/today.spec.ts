@@ -41,6 +41,15 @@ for (const scenario of todayScenarios) {
   })
 }
 
+test('race day with low readiness keeps the race and gives pacing advice instead of moving it', async ({ page }) => {
+  await seed(page, { race: fixedDate, start: '2026-01-01', well: { [fixedDate]: { sleep: 4, rd: 40, ctl: 30, atl: 75 } } })
+  await page.goto('/')
+  await expect(page.locator('#today .ring')).toHaveAttribute('aria-label', 'Training Readiness 25 von 100')
+  await expect(page.locator('#today .ht')).toHaveText('MARATHON')
+  await expect(page.locator('#today .hn')).toContainText('Erste Kilometer bewusst kontrolliert laufen.')
+  await expect(page.locator('#today')).not.toContainText(/verschieben/i)
+})
+
 test('factors persist, info opens, profile changes update the greeting', async ({ page }) => {
   await seed(page)
   await page.goto('/')
