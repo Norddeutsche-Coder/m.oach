@@ -49,6 +49,8 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 3. `/finish-taiga-ticket <nr>`: prüft die Bedingungen, erstellt nach Go den PR (**Im Review**), merged, prüft live, Neuigkeit im Wiki, dann **Abnahme** oder **Fertig**.
 4. **Abnahme nach der Veröffentlichung:** nur bei Änderungen, die Läufer bemerken (Oberfläche, Texte, Verhalten). Abnehmen darf jedes Projektmitglied **außer der zugeordneten Person**. Angesprochen wird `@lukcy22`, wenn `fynndow` zugeordnet ist, sonst `@fynndow`. Antwort „Abgenommen“ oder „Nicht abgenommen: …“. Ein erneuter Aufruf von `/finish-taiga-ticket` setzt dann `Fertig` bzw. legt Tasks `Abnahme: …` an und setzt `In Arbeit`. Reine Technik braucht keine Abnahme, bei `hotfix` ist sie optional.
 
+**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Bei Änderungen an der Oberfläche öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser, damit die Person den Unterschied vorher sieht. PR und Squash-Merge macht er ohne weiteres Go, sobald die QA bestanden ist und alle Pipelines grün sind.
+
 ## 6. Sprint, Zuordnung und WIP
 
 - **Zuordnung:** `/implement-taiga-ticket` ordnet Story und Tasks der aufrufenden Person zu. Eine Story, die jemand anderem gehört, nur nach Rückfrage übernehmen.
@@ -81,6 +83,7 @@ Skills nur unter `.agents/skills/` ändern, danach `node scripts/sync-skills.mjs
 | `implement-taiga-ticket` | Sitzungsmodell, `effort: high`                             | `moach-deep`: `gpt-6-astra`, `high`      |
 | `qa-taiga-ticket`        | Subagent (`context: fork`), Sitzungsmodell, `effort: high` | `moach-deep`: `gpt-6-astra`, `high`      |
 | `finish-taiga-ticket`    | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
+| `lukas-plant-setzt-um-testet-und-laedt-hoch` | Sitzungsmodell, `effort: high`, QA als Subagent, Abschluss als Subagent mit `sonnet` | `moach-deep`: `gpt-6-astra`, `high`      |
 
 - **Claude Code:** `model` und `effort` gelten für den Zug, in dem der Skill aufgerufen wird. Nach der nächsten Eingabe, etwa dem Go an einem Haltepunkt, gilt wieder das Sitzungsmodell.
 - **Codex:** Skills können kein Modell und keinen Reasoning-Aufwand festlegen. Weder `SKILL.md` noch `agents/openai.yaml` haben dafür ein Feld. Deshalb liegen die persönlichen Profile `moach-deep.config.toml`, `moach-routine.config.toml` und `moach-quick.config.toml` unter `~/.codex/` (Windows: `%USERPROFILE%\.codex\`). Sie enthalten jeweils nur `model` und `model_reasoning_effort`. `moach-quick` nutzt `gpt-6-luna` mit `low` für kurze Fragen ohne Skill. Profile gehören nicht ins Repository; die Projektdatei `.codex/config.toml` ignoriert `profile`/`profiles` und liefert weiterhin die MCP-Konfiguration.
