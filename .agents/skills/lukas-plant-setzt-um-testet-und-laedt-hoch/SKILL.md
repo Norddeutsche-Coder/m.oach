@@ -33,14 +33,16 @@ Sag zu Beginn in einem Satz, bei welcher Stufe du einsteigst und warum.
 
 **Auf Pipelines warten, ohne abzufragen:** Wo ein Skill auf CI, PR-Checks oder Deployment wartet, nicht wiederholt `gh run list` aufrufen. Stattdessen einmal die Lauf-ID holen (erscheint sie nicht sofort nach dem Push, kurz warten) und dann blockierend warten: `gh run watch <id> --exit-status` bzw. für PR-Checks `gh pr checks <nr> --watch --fail-fast`. In Claude Code läuft das im Hintergrund (`run_in_background`, oder `Monitor` mit Abbruchbedingung), du wirst beim Ende benachrichtigt. Ohne Hintergrund-Werkzeug im Vordergrund mit passendem Zeitlimit. Die Zeitlimits der Skills (15 bzw. 20 Minuten) gelten weiter.
 
-**Fachliche Fragen:** Ist die aufrufende Person `lukcy22` (`python3 -I scripts/moach_taiga.py me`), stellst du fachliche Fragen direkt im Dialog über das Auswahl-Werkzeug statt als Kommentar und schreibst die Antworten als `Antworten von @lukcy22 (im Dialog mit <Agent>): …` an die Story. Sonst gilt die Fragerunde aus `docs/workflow.md`: Kommentar, dann hält der Ablauf für diese Story an.
+**Jede Frage an die Person über das Fragetool:** In diesem Skill stellst du **alle** Fragen und Haltepunkte über das Fragetool, nie nur als Chatnachricht. Das gilt für fehlende Eingaben, Rückfragen, jedes Go, die Vorschau, die Auswahl der Story und Fragen, die ein Subagent zurückgibt. In Claude Code ist das `AskUserQuestion` (Einzelauswahl, 2–4 Optionen, die empfohlene zuerst mit „(Recommended)“). Braucht die Antwort eigenen Text (z. B. eine Idee oder ein Änderungswunsch), biete trotzdem sinnvolle Optionen an, der Text kommt über das Freitextfeld. Übersichten, Diffs und Berichte zeigst du vorher im Chat, die Frage selbst stellt immer das Werkzeug. Nur wenn der Agent kein solches Werkzeug hat (z. B. Codex), nummerierte Optionen im Chat wie in `docs/workflow.md`, Abschnitt 1.
+
+**Fachliche Fragen:** Ist die aufrufende Person `lukcy22` (`python3 -I scripts/moach_taiga.py me`), stellst du fachliche Fragen direkt im Dialog über das Fragetool statt als Kommentar und schreibst die Antworten als `Antworten von @lukcy22 (im Dialog mit <Agent>): …` an die Story. Sonst gilt die Fragerunde aus `docs/workflow.md`: Kommentar, dann hält der Ablauf für diese Story an.
 
 ## Stufe 1: Epic planen
 
 Folge `plan-taiga-epic` bis zum Abschlussbericht. Danach:
 
 1. Zeig die angelegten Stories mit Status. Nur Stories auf `Bereit` können weiter. Stories auf `Neu` (offene Fragerunde, fehlender Entwurf) nennst du mit dem fehlenden Punkt.
-2. Frag über das Auswahl-Werkzeug, welche Story als Nächstes umgesetzt wird (Empfehlung: die erste ohne Abhängigkeiten) oder ob der Ablauf nach der Planung endet.
+2. Frag über das Fragetool, welche Story als Nächstes umgesetzt wird (Empfehlung: die erste ohne Abhängigkeiten) oder ob der Ablauf nach der Planung endet.
 
 ## Stufe 2: Story umsetzen
 
@@ -60,7 +62,7 @@ Folge `implement-taiga-ticket` für die gewählte Story, Phase 0 bis Phase 5. Ha
    Das Skript startet den Dev-Server selbst mit den Testwerten aus AGENTS.md auf dem ersten freien Port von 4183 bis 4189. Der eigene Port hält die Testdaten getrennt von lokalen Daten auf dem üblichen Dev-Port. Der Server lädt Änderungen sofort neu, die Fenster können während Nachbesserungen offen bleiben. Externe Anfragen sind blockiert.
 3. Auf die Zeile `alle Fenster geöffnet: …` warten. `FEHLER: Dev-Server antwortet nicht` → Ausgabe zeigen und anhalten. `FEHLER <name>` heißt: Seite, Tab oder Klickziel nicht erreichbar, das Fenster zeigt also nicht die geänderte Ansicht. Szenario korrigieren und neu starten, bevor du die Person fragst. Ausgaben mit `!` sind Konsolenfehler und gehören in den Haltepunkt.
 4. Die Person schließt die Fenster selbst, wenn sie fertig ist. Danach beendet das Skript den Server von allein.
-5. **Haltepunkt 2 mit Vorschau:** Zeig die Übersicht aus Phase 5 von `implement-taiga-ticket` (Checks, Acceptance Criteria, `git diff --stat`, Commit-Nachricht), dazu welche Fenster offen sind, was dort geändert ist und worauf die Person achten soll (bei freigegebenem Entwurf: Abweichungen davon). Die Person darf in den Fenstern frei klicken. Frag dann über das Auswahl-Werkzeug:
+5. **Haltepunkt 2 mit Vorschau:** Zeig die Übersicht aus Phase 5 von `implement-taiga-ticket` (Checks, Acceptance Criteria, `git diff --stat`, Commit-Nachricht), dazu welche Fenster offen sind, was dort geändert ist und worauf die Person achten soll (bei freigegebenem Entwurf: Abweichungen davon). Die Person darf in den Fenstern frei klicken. Frag dann über das Fragetool (`AskUserQuestion`), nie als Chatnachricht:
    - „Gefällt mir, committen und pushen“ (Recommended): gilt als Go für Phase 6,
    - „Oberfläche ändern“: die Person beschreibt im eigenen Text, was anders soll,
    - „Andere Ansicht zeigen“: Szenarien anpassen und neu öffnen,
@@ -83,10 +85,10 @@ Zeig den Bericht. Dann:
 
 Folge `finish-taiga-ticket`, aber **ohne den Haltepunkt vor PR und Merge**: Der Aufruf dieses Skills gilt als Go dafür, solange alle Bedingungen erfüllt sind. **Ausnahme: riskante Stories.**
 
-**Risiko prüfen (selbst, vor dem Subagenten):** Riskant ist eine Story mit einem der Tags `sicherheit`, `rls`, `datenverlust` oder `hotfix`, oder wenn der Diff (`git diff --name-only origin/main...origin/<branch>`) Dateien unter `backend/`, `frontend/src/sw/`, `.github/` oder `scripts/build-service-worker.mjs` ändert. Dann den Haltepunkt aus Phase 2 von `finish-taiga-ticket` wie dort halten: `finish-check`, `git diff --stat`, PR-Titel und Squash-Nachricht zeigen, den Grund für das Risiko nennen und über das Auswahl-Werkzeug nach dem Go fragen. Ohne Go kein PR.
+**Risiko prüfen (selbst, vor dem Subagenten):** Riskant ist eine Story mit einem der Tags `sicherheit`, `rls`, `datenverlust` oder `hotfix`, oder wenn der Diff (`git diff --name-only origin/main...origin/<branch>`) Dateien unter `backend/`, `frontend/src/sw/`, `.github/` oder `scripts/build-service-worker.mjs` ändert. Dann den Haltepunkt aus Phase 2 von `finish-taiga-ticket` wie dort halten: `finish-check`, `git diff --stat`, PR-Titel und Squash-Nachricht zeigen, den Grund für das Risiko nennen und über das Fragetool nach dem Go fragen. Ohne Go kein PR.
 
 **Ausführen:**
-- **Claude Code:** Die Stufe läuft als Subagent mit dem günstigeren Modell, wie es `finish-taiga-ticket` vorsieht (`Agent`, Typ `general-purpose`, `model: sonnet`, im Vordergrund). Auftrag: Story-Nummer, Branch, ob das Go für eine riskante Story erteilt ist, und „Lies `<repo>/.agents/skills/finish-taiga-ticket/SKILL.md`, `<repo>/docs/workflow.md` und Stufe 5 sowie den Abschnitt zum Warten auf Pipelines in `<repo>/.agents/skills/lukas-plant-setzt-um-testet-und-laedt-hoch/SKILL.md` und folge ihnen. Wo angehalten werden muss, hörst du auf und gibst Grund, Stand und die Frage an die Person zurück. Am Ende gibst du den Abschlussbericht zurück.“ Hält der Subagent an, stellst du die Frage über das Auswahl-Werkzeug und setzt ihn danach mit der Antwort fort (`SendMessage` an denselben Agenten).
+- **Claude Code:** Die Stufe läuft als Subagent mit dem günstigeren Modell, wie es `finish-taiga-ticket` vorsieht (`Agent`, Typ `general-purpose`, `model: sonnet`, im Vordergrund). Auftrag: Story-Nummer, Branch, ob das Go für eine riskante Story erteilt ist, und „Lies `<repo>/.agents/skills/finish-taiga-ticket/SKILL.md`, `<repo>/docs/workflow.md` und Stufe 5 sowie den Abschnitt zum Warten auf Pipelines in `<repo>/.agents/skills/lukas-plant-setzt-um-testet-und-laedt-hoch/SKILL.md` und folge ihnen. Wo angehalten werden muss, hörst du auf und gibst Grund, Stand und die Frage an die Person zurück. Am Ende gibst du den Abschlussbericht zurück.“ Hält der Subagent an, stellst du die Frage über das Fragetool und setzt ihn danach mit der Antwort fort (`SendMessage` an denselben Agenten).
 - **Andere Agenten ohne Subagenten:** Führe die Stufe selbst aus.
 
 **Ablauf:**
