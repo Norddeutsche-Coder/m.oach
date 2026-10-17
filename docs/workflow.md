@@ -49,7 +49,7 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 3. `/finish-taiga-ticket <nr>`: prüft die Bedingungen, erstellt nach Go den PR (**Im Review**), merged, prüft live, Neuigkeit im Wiki, dann **Abnahme** oder **Fertig**.
 4. **Abnahme nach der Veröffentlichung:** nur bei Änderungen, die Läufer bemerken (Oberfläche, Texte, Verhalten). Abnehmen darf jedes Projektmitglied **außer der zugeordneten Person**. Angesprochen wird `@lukcy22`, wenn `fynndow` zugeordnet ist, sonst `@fynndow`. Antwort „Abgenommen“ oder „Nicht abgenommen: …“. Ein erneuter Aufruf von `/finish-taiga-ticket` setzt dann `Fertig` bzw. legt Tasks `Abnahme: …` an und setzt `In Arbeit`. Reine Technik braucht keine Abnahme, bei `hotfix` ist sie optional.
 
-**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Bei Änderungen an der Oberfläche öffnet er vor Commit und Push die geänderte Seite lokal mit Testdaten im Browser, damit die Person sie vorher ansehen kann. PR und Squash-Merge macht er ohne weiteres Go, sobald die QA bestanden ist und alle Pipelines grün sind.
+**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Bei Änderungen an der Oberfläche öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser, damit die Person den Unterschied vorher sieht. PR und Squash-Merge macht er ohne weiteres Go, sobald die QA bestanden ist und alle Pipelines grün sind.
 
 ## 6. Sprint, Zuordnung und WIP
 

@@ -1,6 +1,6 @@
 ---
 name: lukas-plant-setzt-um-testet-und-laedt-hoch
-description: Führt den ganzen Ablauf in einer Sitzung nacheinander aus, von der Idee bis zur Veröffentlichung, z. B. `/lukas-plant-setzt-um-testet-und-laedt-hoch Onboarding für neue Läufer` oder mit einer Story-Nummer `/lukas-plant-setzt-um-testet-und-laedt-hoch 27` (steigt nach Taiga-Status in die passende Stufe ein, auch zum Fortsetzen). Plant das Epic, setzt jede gewählte Story um, öffnet bei Änderungen an der Oberfläche vor Commit und Push die geänderte Seite lokal im Browser zur Ansicht, lässt die QA unabhängig prüfen und erstellt nach bestandener QA automatisch PR und Merge, sobald alle Pipelines grün sind (bei riskanten Stories erst nach Go), mit anschließender Live-Prüfung. Die übrigen Haltepunkte der einzelnen Skills bleiben erhalten.
+description: Führt den ganzen Ablauf in einer Sitzung nacheinander aus, von der Idee bis zur Veröffentlichung, z. B. `/lukas-plant-setzt-um-testet-und-laedt-hoch Onboarding für neue Läufer` oder mit einer Story-Nummer `/lukas-plant-setzt-um-testet-und-laedt-hoch 27` (steigt nach Taiga-Status in die passende Stufe ein, auch zum Fortsetzen). Plant das Epic, setzt jede gewählte Story um, öffnet bei Änderungen an der Oberfläche vor Commit und Push die alte und die geänderte Seite lokal nebeneinander im Browser, lässt die QA unabhängig prüfen und erstellt nach bestandener QA automatisch PR und Merge, sobald alle Pipelines grün sind (bei riskanten Stories erst nach Go), mit anschließender Live-Prüfung. Die übrigen Haltepunkte der einzelnen Skills bleiben erhalten.
 argument-hint: <idee> | <story-nummer>
 disable-model-invocation: true
 effort: high
@@ -54,21 +54,23 @@ Folge `implement-taiga-ticket` für die gewählte Story, Phase 0 bis Phase 5. Ha
 
 **Vorgehen:**
 
-1. `<tmp>/vorschau-tg-<nr>/szenarien.json` schreiben, im Format von `qa-taiga-ticket/scripts/shots.cjs`: Testdaten wie in `frontend/tests/today.spec.ts` und `frontend/tests/fixtures/`, festes Datum, `tab` für die geänderte Ansicht, ggf. `click`, damit genau der geänderte Zustand zu sehen ist. Standard: ein Fenster Handy hell und eins Desktop dunkel, höchstens 4 Fenster. Bei geänderten Farben, `app.css` oder Layout alle vier Kombinationen.
+1. `<tmp>/vorschau-tg-<nr>/szenarien.json` schreiben, im Format von `qa-taiga-ticket/scripts/shots.cjs`: Testdaten wie in `frontend/tests/today.spec.ts` und `frontend/tests/fixtures/`, festes Datum, `tab` für die geänderte Ansicht, ggf. `click`, damit genau der geänderte Zustand zu sehen ist. Standard: zwei Szenarien, Handy hell und Desktop dunkel. Bei geänderten Farben, `app.css` oder Layout alle vier Kombinationen. Jedes Szenario öffnet sich zweimal, vorher und nachher.
 2. Vorschau im Hintergrund starten (falls Chromium fehlt, vorher `npx playwright install chromium` in `frontend/`). Der Befehl ist unter macOS, Linux und Windows gleich:
    ```sh
-   node <repo>/.agents/skills/lukas-plant-setzt-um-testet-und-laedt-hoch/scripts/preview.cjs <repo>/frontend <tmp>/vorschau-tg-<nr>/szenarien.json
+   node <repo>/.agents/skills/lukas-plant-setzt-um-testet-und-laedt-hoch/scripts/preview.cjs <repo>/frontend <tmp>/vorschau-tg-<nr>/szenarien.json --vorher <basis>
    ```
-   Das Skript startet den Dev-Server selbst mit den Testwerten aus AGENTS.md auf dem ersten freien Port von 4183 bis 4189. Der eigene Port hält die Testdaten getrennt von lokalen Daten auf dem üblichen Dev-Port. Der Server lädt Änderungen sofort neu, die Fenster können während Nachbesserungen offen bleiben. Externe Anfragen sind blockiert.
-3. Auf die Zeile `alle Fenster geöffnet: …` warten. `FEHLER: Dev-Server antwortet nicht` → Ausgabe zeigen und anhalten. `FEHLER <name>` heißt: Seite, Tab oder Klickziel nicht erreichbar, das Fenster zeigt also nicht die geänderte Ansicht. Szenario korrigieren und neu starten, bevor du die Person fragst. Ausgaben mit `!` sind Konsolenfehler und gehören in den Haltepunkt.
-4. Die Person schließt die Fenster selbst, wenn sie fertig ist. Danach beendet das Skript den Server von allein.
-5. **Haltepunkt 2 mit Vorschau:** Zeig die Übersicht aus Phase 5 von `implement-taiga-ticket` (Checks, Acceptance Criteria, `git diff --stat`, Commit-Nachricht), dazu welche Fenster offen sind, was dort geändert ist und worauf die Person achten soll (bei freigegebenem Entwurf: Abweichungen davon). Die Person darf in den Fenstern frei klicken. Frag dann über das Fragetool (`AskUserQuestion`), nie als Chatnachricht:
+   `<basis>` ist der Stand vor der Story: `git merge-base HEAD origin/main`. So zeigt „vorher“ auch nach QA-Runden den Stand ohne die Story und keine fremden neuen Commits auf `main`.
+
+   Das Skript startet „nachher“ als Dev-Server aus dem Arbeitsverzeichnis. Der lädt Änderungen sofort neu, die Fenster können während Nachbesserungen offen bleiben. „Vorher“ checkt es als Git-Worktree unter `<tmp>/vorschau-tg-<nr>/basis-src` aus, baut es einmal und stellt es daneben bereit. Beide nutzen die Testwerte aus AGENTS.md und die ersten freien Ports von 4183 bis 4189. Die eigenen Ports halten die Testdaten getrennt von lokalen Daten auf dem üblichen Dev-Port. Die Fenster tragen oben das Schild **VORHER** (grau, links) bzw. **NACHHER** (blau, rechts). Externe Anfragen und Service Worker sind blockiert.
+3. Auf die Zeile `alle Fenster geöffnet: …` warten. `FEHLER: …` ohne Szenario (Server, Worktree, Build) → Ausgabe zeigen und anhalten. `FEHLER <name> · nachher` heißt: Seite, Tab oder Klickziel nicht erreichbar, das Fenster zeigt also nicht die geänderte Ansicht. Szenario korrigieren und neu starten, bevor du die Person fragst. `FEHLER <name> · vorher` ist erwartbar, wenn die Story eine Ansicht oder ein Element neu einführt. Sag das dann im Haltepunkt. Ausgaben mit `!` sind Konsolenfehler und gehören in den Haltepunkt.
+4. Die Person schließt die Fenster selbst, wenn sie fertig ist. Danach beendet das Skript die Server und entfernt den Worktree von allein.
+5. **Haltepunkt 2 mit Vorschau:** Zeig die Übersicht aus Phase 5 von `implement-taiga-ticket` (Checks, Acceptance Criteria, `git diff --stat`, Commit-Nachricht), dazu welche Fenster offen sind, was sich zwischen vorher und nachher unterscheidet und worauf die Person achten soll (bei freigegebenem Entwurf: Abweichungen davon). Die Person darf in den Fenstern frei klicken. Frag dann über das Fragetool (`AskUserQuestion`), nie als Chatnachricht:
    - „Gefällt mir, committen und pushen“ (Recommended): gilt als Go für Phase 6,
    - „Oberfläche ändern“: die Person beschreibt im eigenen Text, was anders soll,
    - „Andere Ansicht zeigen“: Szenarien anpassen und neu öffnen,
    - „Abbrechen“: nichts committen, Stand melden.
 6. **Änderungswünsche:** Liegen sie im Umfang der Story und im freigegebenen Entwurf, umsetzen, schnelle Checks wiederholen und erneut ab Schritt 5 fragen. Ändern sie das Verhalten für Läufer, Texte oder den Entwurf über die Story hinaus, ist das eine fachliche Frage (siehe oben), keine eigene Entscheidung. Weicht die Umsetzung danach vom Entwurf ab, gehört die Begründung in den Kommentar „Umgesetzt“.
-7. Nach dem Go oder Abbruch: Läuft die Vorschau noch, den Hintergrund-Prozess beenden (das stoppt auch den Server), `<tmp>/vorschau-tg-<nr>/` löschen.
+7. Nach dem Go oder Abbruch: Läuft die Vorschau noch, den Hintergrund-Prozess beenden (das stoppt die Server und entfernt den Worktree; bleibt `basis-src` doch liegen, `git worktree remove --force` darauf), `<tmp>/vorschau-tg-<nr>/` löschen.
 
 ## Stufe 4: QA
 
