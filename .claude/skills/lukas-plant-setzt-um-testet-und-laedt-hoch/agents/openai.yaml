@@ -1,0 +1,5 @@
+interface:
+  display_name: "Planen, umsetzen, prüfen und abschließen"
+  short_description: "Führt Epic-Planung, Umsetzung mit lokaler UI-Vorschau, QA und Abschluss nacheinander aus"
+policy:
+  allow_implicit_invocation: false
