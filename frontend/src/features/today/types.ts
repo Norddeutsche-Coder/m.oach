@@ -8,7 +8,7 @@ export interface Adjustment {
   mode: 'plan' | 'rest' | 'move' | 'swap' | 'reduced'; km: number; title: string | null; note: string
 }
 export interface Readiness {
-  lvl: 0 | 1 | 2; score: number; adj: number; w: number
+  lvl: 0 | 1 | 2; score: number; adj: number; w: number; pain?: number
   m: { rd?: number }; f: Record<string, number>
 }
 export interface Trend {
