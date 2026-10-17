@@ -103,9 +103,24 @@ Unter Windows weichen nur Werkzeuge, Variablen und Neustart ab. Token und Taiga-
 ## Andere Agenten (Codex)
 
 Codex liest die Projektregeln aus `AGENTS.md` automatisch. Den Taiga-Server bekommt Codex über die Projektdatei `.codex/config.toml`, das Gegenstück zu `.mcp.json`:
+
 - gleicher Befehl und gleiche Version (`npx -y mcp-taiga@1.0.0`),
 - `env_vars` reicht nur die **Namen** `TAIGA_USERNAME` und `TAIGA_PASSWORD` aus der eigenen Umgebung weiter, die Werte stehen nie in der Datei.
 
 Die Zugangsdaten kommen wie für Claude Code aus `~/.zshrc` (Abschnitt 4). Ändert sich die Version von `mcp-taiga`, beide Dateien gemeinsam anpassen.
 
 Die Skills (`triage-taiga-issues`, `plan-taiga-epic`, `plan-taiga-sprint`, `implement-taiga-ticket`, `qa-taiga-ticket`, `finish-taiga-ticket`) liegen unter `.agents/skills/`. Dort findet Codex sie automatisch. Claude Code liest eine Kopie in `.claude/skills/`, die `node scripts/sync-skills.mjs` erzeugt (echte Dateien, keine Symlinks, deshalb ohne Zusatzeinstellungen auch unter Windows). Aufruf mit `$<name>`, z. B. `$implement-taiga-ticket 27`, oder über `/skills`. `agents/openai.yaml` verhindert, dass Codex sie ungefragt startet.
+
+Damit jeder Skill mit dem passenden Modell und Reasoning-Aufwand läuft, drei persönliche Profildateien unter `~/.codex/` anlegen (Windows: `%USERPROFILE%\.codex\`):
+
+- `moach-deep.config.toml`: `model = "gpt-6-astra"` und `model_reasoning_effort = "high"`
+- `moach-routine.config.toml`: `model = "gpt-6.1-sol"` und `model_reasoning_effort = "medium"`
+- `moach-quick.config.toml`: `model = "gpt-6-luna"` und `model_reasoning_effort = "low"`
+
+Die Dateien enthalten nur diese beiden Einstellungen. Zugangsdaten und MCP-Server bleiben in der bestehenden persönlichen bzw. Projektkonfiguration. Skills anschließend über `scripts/codex-skill.sh <skill> [argumente]` starten, zum Beispiel:
+
+```sh
+scripts/codex-skill.sh implement-taiga-ticket 27
+```
+
+Das Skript ordnet Planungs-, Umsetzungs- und QA-Skills `moach-deep` zu; Triage, Sprintplanung und Abschluss laufen mit `moach-routine`. Für kurze Fragen ohne Skill `codex --profile moach-quick` verwenden. Die vollständige Zuordnung steht in `docs/workflow.md`, Abschnitt 10.

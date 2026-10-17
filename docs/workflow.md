@@ -73,14 +73,22 @@ Skills nur unter `.agents/skills/` ändern, danach `node scripts/sync-skills.mjs
 
 ## 10. Modelle in Claude Code und Codex
 
-| Skill | Claude Code (Frontmatter) | Codex |
-|---|---|---|
-| `plan-taiga-epic` | Sitzungsmodell, `effort: high` | Sitzungsmodell |
-| `triage-taiga-issues` | `model: sonnet`, `effort: medium` | Sitzungsmodell |
-| `plan-taiga-sprint` | `model: sonnet`, `effort: medium` | Sitzungsmodell |
-| `implement-taiga-ticket` | Sitzungsmodell, `effort: high` | Sitzungsmodell |
-| `qa-taiga-ticket` | Subagent (`context: fork`), Sitzungsmodell, `effort: high` | Sitzungsmodell, gleiche Sitzung |
-| `finish-taiga-ticket` | `model: sonnet`, `effort: medium` | Sitzungsmodell |
+| Skill                    | Claude Code (Frontmatter)                                  | Codex-Profil                             |
+| ------------------------ | ---------------------------------------------------------- | ---------------------------------------- |
+| `plan-taiga-epic`        | Sitzungsmodell, `effort: high`                             | `moach-deep`: `gpt-6-astra`, `high`      |
+| `triage-taiga-issues`    | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
+| `plan-taiga-sprint`      | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
+| `implement-taiga-ticket` | Sitzungsmodell, `effort: high`                             | `moach-deep`: `gpt-6-astra`, `high`      |
+| `qa-taiga-ticket`        | Subagent (`context: fork`), Sitzungsmodell, `effort: high` | `moach-deep`: `gpt-6-astra`, `high`      |
+| `finish-taiga-ticket`    | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
 
 - **Claude Code:** `model` und `effort` gelten für den Zug, in dem der Skill aufgerufen wird. Nach der nächsten Eingabe, etwa dem Go an einem Haltepunkt, gilt wieder das Sitzungsmodell.
-- **Codex:** Skills können kein Modell und keinen Reasoning-Aufwand festlegen. Weder `SKILL.md` noch `agents/openai.yaml` haben dafür ein Feld. Es gilt das Modell der Sitzung (`model` und `model_reasoning_effort` in `~/.codex/config.toml`, `/model` oder `codex -m <modell>`). Wer pro Schritt unterschiedlich arbeiten will, legt persönliche Profile an, z. B. `~/.codex/qa.config.toml` mit `model_reasoning_effort = "high"` und `~/.codex/routine.config.toml` mit einem kleineren Modell, und startet `codex --profile qa` bzw. `codex --profile routine`. Profile gehören in die persönliche Konfiguration, nicht ins Repository (die Projektdatei `.codex/config.toml` ignoriert `profile`/`profiles`).
+- **Codex:** Skills können kein Modell und keinen Reasoning-Aufwand festlegen. Weder `SKILL.md` noch `agents/openai.yaml` haben dafür ein Feld. Deshalb liegen die persönlichen Profile `moach-deep.config.toml`, `moach-routine.config.toml` und `moach-quick.config.toml` unter `~/.codex/` (Windows: `%USERPROFILE%\.codex\`). Sie enthalten jeweils nur `model` und `model_reasoning_effort`. `moach-quick` nutzt `gpt-6-luna` mit `low` für kurze Fragen ohne Skill. Profile gehören nicht ins Repository; die Projektdatei `.codex/config.toml` ignoriert `profile`/`profiles` und liefert weiterhin die MCP-Konfiguration.
+
+  Skills immer über das Startskript in einer frischen Sitzung aufrufen:
+
+  ```sh
+  scripts/codex-skill.sh implement-taiga-ticket 27
+  ```
+
+  Das Skript wählt `moach-deep` oder `moach-routine` gemäß der Tabelle und startet `codex --profile <profil> "$<skill> <argumente>"`. Mit `scripts/codex-skill.sh --dry-run plan-taiga-sprint` lässt sich der Befehl anzeigen, ohne Codex zu starten. Für eine kurze Frage ohne Skill Codex direkt mit `codex --profile moach-quick` starten.
