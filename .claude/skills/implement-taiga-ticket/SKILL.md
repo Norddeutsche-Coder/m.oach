@@ -37,6 +37,7 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 - **Acceptance Criteria** einzeln mit dem Weg zur Erfüllung,
 - **Schritte** (je höchstens ½ Tag, werden zu Tasks) und **betroffene Dateien**,
 - **Tests:** welche Unit-Tests (Datei `*.test.ts`) und E2E-Tests (`frontend/tests/`) neu entstehen oder sich ändern, je mit dem Fall, den sie absichern,
+- **Schnittstellen** für Test und Logik: Namen, Parameter und Rückgabetypen neuer Funktionen, Dateipfade, Texte und Selektoren, die die E2E-Tests ansprechen. Test- und Logik-Agent bauen beide darauf auf (Phase 4),
 - **Fachliche Fragen an `lukcy22`**: Gibt es welche, als Kommentar an die Story stellen (Format in `docs/workflow.md`) und anhalten.
 - **Architektur-Fragen an `fynndow`** mit Alternativen und Empfehlung, im Dialog,
 - **Technische Entscheidungen**, die du selbst triffst,
@@ -53,17 +54,24 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 
 ## Phase 4: Umsetzen
 
-Tasks der Reihe nach: beim Beginn `In Arbeit`, nach Abschluss `Im Test`. Entwurf umsetzen, Abweichungen notieren. Stil der Umgebung, nichts außerhalb des Umfangs (Auffälliges notieren). Ein Task kommt nicht weiter → `Blockiert` mit Kommentar, anhalten.
+**Erst der Test, dann die Logik, jeweils von einem eigenen Subagenten.** Du selbst koordinierst nur und schreibst weder Tests noch Logik. Gilt für die Story und für jede Nachbesserung (`QA: …`, `Abnahme: …`). Ausnahme nur für reine Doku, CI oder Konfiguration ohne Verhalten, mit Begründung im Haltepunkt 2.
 
-**Tests gehören zur Umsetzung**, auch wenn die Acceptance Criteria sie nicht ausdrücklich nennen (Definition of Done):
-- Neue oder geänderte Logik bekommt Unit-Tests als `*.test.ts` neben dem Code: Normalfall, Grenzwerte und Sonderfälle. Mit Datum immer mit festem Datum (`vi.setSystemTime`) und zeitzonenunabhängig (AGENTS.md Regel 5).
-- Neues oder geändertes sichtbares Verhalten bekommt E2E-Tests in `frontend/tests/`, mit Testdaten wie in `frontend/tests/fixtures/`.
-- Ein behobener Fehler bekommt einen Test, der ohne die Korrektur fehlschlägt.
-- Ausnahme nur für reine Doku, CI oder Konfiguration ohne Verhalten. Dann im Haltepunkt 2 begründen.
+1. **Test-Agent** (Claude Code: `Agent`, Typ `general-purpose`, im Vordergrund). Er bekommt Story-Nummer, Acceptance Criteria, die Punkte „Tests“ und „Schnittstellen“ aus dem freigegebenen Plan und diese Regeln, aber **keinen Code der Umsetzung**. Er schreibt nur Tests und Testdaten (`*.test.ts`, `frontend/tests/**`) und ändert nichts anderes:
+   - Logik: Unit-Tests neben dem Code für Normalfall, Grenzwerte und Sonderfälle. Mit Datum immer mit festem Datum (`vi.setSystemTime`) und zeitzonenunabhängig (AGENTS.md Regel 5).
+   - Sichtbares Verhalten: E2E-Tests in `frontend/tests/`, mit Testdaten wie in `frontend/tests/fixtures/`.
+   - Behobener Fehler: ein Test, der den Fehler zeigt.
+   - **Rot belegen:** Die neuen Tests laufen und schlagen fehl, aus dem richtigen Grund: falsches Ergebnis, fehlendes Element oder noch nicht vorhandene Funktion. Nie wegen eines Fehlers im Test selbst. Befehle: `npx vitest run <dateien> --reporter=dot` bzw. `npx playwright test <spec> --reporter=dot` in `frontend/`.
+   - Rückgabe: Liste der Tests (Datei, Name, abgesicherter Fall) und die rote Ausgabe, gekürzt.
+2. **Prüfen:** Ändert der Test-Agent etwas außerhalb der Test-Dateien, oder ist ein Test grün, obwohl die Logik fehlt, schickst du ihn mit dem Befund zurück (`SendMessage`). Danach den Stand der Tests festhalten: `git hash-object <test-dateien>` nach `<tmp>/tg-<nr>-tests.sha`.
+3. **Logik-Agent** (neuer Subagent, nie derselbe wie in Schritt 1). Er bekommt Story, Plan, Entwurf und die Liste der Test-Dateien. Er setzt die Tasks der Reihe nach um, bis alle Tests grün sind. Tasks: beim Beginn `In Arbeit`, nach Abschluss `Im Test`. Entwurf umsetzen, Abweichungen notieren. Stil der Umgebung, nichts außerhalb des Umfangs (Auffälliges notieren). **Test-Dateien darf er nicht ändern.** Hält er einen Test für falsch, hört er auf und gibt die Begründung zurück. Rückgabe: geänderte Dateien, grüne Ausgabe, Abweichungen vom Entwurf, Auffälligkeiten.
+4. **Prüfen:** `git hash-object` der Test-Dateien mit `<tmp>/tg-<nr>-tests.sha` vergleichen. Abweichung → die Änderung an den Tests zurücknehmen und den Logik-Agenten erneut beauftragen. **Ein Test ist falsch:** Begründung zeigen und über das Fragetool fragen, ob der Test-Agent ihn korrigiert (danach Schritt 2 bis 4) oder die Logik angepasst wird.
+5. Ein Task kommt nicht weiter → `Blockiert` mit Kommentar, anhalten.
+
+**Ohne Subagenten** (z. B. Codex): dieselbe Reihenfolge selbst einhalten. Zuerst nur Tests schreiben und rot belegen, Stand festhalten, danach die Logik, ohne die Tests zu ändern.
 
 ## Phase 5: Checks und Freigabe (Haltepunkt 2)
 
-Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben, höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, **neue und geänderte Tests** mit Datei und Testname (oder die begründete Ausnahme), `git diff --stat`, Commit-Nachricht. Fehlen Tests für neue Logik oder neues Verhalten, ist das kein Stand für ein Go. **Ohne Go kein Commit und kein Push.**
+Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben (Logik über den Logik-Agenten, Tests über den Test-Agenten), höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, **neue und geänderte Tests** mit Datei und Testname, Beleg „erst rot, dann grün“ und Bestätigung, dass der Logik-Agent keine Test-Datei geändert hat (oder die begründete Ausnahme), `git diff --stat`, Commit-Nachricht. Fehlen Tests für neue Logik oder neues Verhalten, ist das kein Stand für ein Go. **Ohne Go kein Commit und kein Push.**
 
 ## Phase 6: Commit und Push (nach Go)
 

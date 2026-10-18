@@ -44,7 +44,7 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 
 ## 5. Ablauf einer Story
 
-1. `/implement-taiga-ticket <nr>`: Plan, Umsetzung, schnelle Checks, Commit, Push, CI grün → **Im Test**. **Kein PR.**
+1. `/implement-taiga-ticket <nr>`: Plan, Umsetzung, schnelle Checks, Commit, Push, CI grün → **Im Test**. **Kein PR.** Umgesetzt wird testgetrieben: Ein Subagent schreibt zuerst die Tests und belegt, dass sie fehlschlagen, ein zweiter schreibt danach die Logik, ohne die Tests zu ändern.
 2. `/qa-taiga-ticket <nr>`: prüft den gepushten Branch. Befunde → `In Arbeit` mit Tasks `QA: …`. Bestanden → Tasks `Erledigt`, Story bleibt `Im Test`.
 3. `/finish-taiga-ticket <nr>`: prüft die Bedingungen, erstellt nach Go den PR (**Im Review**), merged, prüft live, Neuigkeit im Wiki, dann **Abnahme** oder **Fertig**.
 4. **Abnahme nach der Veröffentlichung:** nur bei Änderungen, die Läufer bemerken (Oberfläche, Texte, Verhalten). Abnehmen darf jedes Projektmitglied **außer der zugeordneten Person**. Angesprochen wird `@lukcy22`, wenn `fynndow` zugeordnet ist, sonst `@fynndow`. Antwort „Abgenommen“ oder „Nicht abgenommen: …“. Ein erneuter Aufruf von `/finish-taiga-ticket` setzt dann `Fertig` bzw. legt Tasks `Abnahme: …` an und setzt `In Arbeit`. Reine Technik braucht keine Abnahme, bei `hotfix` ist sie optional.
