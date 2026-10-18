@@ -3,6 +3,7 @@
 # results are reproducible and the agent only reads a compact summary.
 #
 # Credentials come from TAIGA_USERNAME and TAIGA_PASSWORD and are never printed.
+# Discord commands read DISCORD_NEWS_WEBHOOK and DISCORD_BOT_TOKEN, also never printed.
 # Usage: python3 -I scripts/moach_taiga.py <command> [args]   (see --help)
 import argparse
 import datetime
@@ -12,6 +13,8 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -22,6 +25,20 @@ STATUS_RANK = {"In Arbeit": 0, "Im Test": 1, "Im Review": 2, "Abnahme": 3,
                "Bereit": 4, "Neu": 5, "Fertig": 6, "Archiviert": 7}
 QUESTION_HEADS = ("## Fachliche Fragen an @", "## Technische Fragen an @")
 RESOLVING_PREFIXES = ("Antworten", "Entschieden")
+
+APP_URL = "https://norddeutsche-coder.github.io/m.oach/"
+LIVE_STATUSES = {"Abnahme", "Fertig", "Archiviert"}
+DISCORD_API = "https://discord.com/api/v10"
+DISCORD_GUILD_ID = "1561383271823315024"
+DISCORD_USER_AGENT = "DiscordBot (https://github.com/Norddeutsche-Coder/m.oach, 1)"
+DISCORD_WEBHOOK_PREFIX = "https://discord.com/api/webhooks/"
+BUGS_FORUM = "bugs"
+TAG_NEW, TAG_CONFIRMED, TAG_FIXED = "Neu", "Bestätigt", "Behoben"
+TAG_IN_TAIGA, TAG_NO_BUG = "In Taiga", "Kein Bug"
+DEVICE_TAGS = ("iPhone", "Android", "Desktop")
+MAX_FORUM_TAGS = 5
+MAX_MESSAGE = 2000
+MAX_SUBJECT = 200
 
 
 class Taiga:
@@ -39,9 +56,16 @@ class Taiga:
             data=json.dumps(body).encode() if body is not None else None,
             headers={"Content-Type": "application/json", "x-disable-pagination": "True",
                      **({"Authorization": "Bearer " + self.token} if self.token else {})})
-        with urllib.request.urlopen(req) as res:
-            raw = res.read()
-            return json.loads(raw) if raw else {}
+        # Only method and path without query in errors: body, query and token stay hidden.
+        shown = f"{method} {path.split('?')[0]}"
+        try:
+            with urllib.request.urlopen(req, timeout=30) as res:
+                raw = res.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as err:
+            sys.exit(f"Taiga-Anfrage fehlgeschlagen: {shown} → HTTP {err.code}")
+        except OSError:  # URLError, TimeoutError, connection errors
+            sys.exit(f"Taiga nicht erreichbar: {shown}")
 
     def story(self, ref):
         return self.call("GET", f"/userstories/by_ref?project={self.pid}&ref={ref}")
@@ -82,6 +106,157 @@ def detect_slug():
 
 def ok(flag):
     return "✅" if flag else "❌"
+
+
+# --- Discord: pure helpers ---------------------------------------------------
+
+def news_refs(text):
+    return {int(n) for n in re.findall(r"\(#(\d+)\)", text or "")}
+
+
+def epic_news_due(stories, refs):
+    # Announce only finished epics with at least one story the runners noticed.
+    return bool(stories) and all(s["status"] in LIVE_STATUSES for s in stories) \
+        and any(s["ref"] in refs for s in stories)
+
+
+def discord_link(description):
+    m = re.search(r"^Discord:\s*(https://discord\.com/channels/\S+)\s*$", description or "", re.M)
+    return m.group(1) if m else None
+
+
+def parse_thread_link(link):
+    m = re.fullmatch(r"https://discord\.com/channels/(\d+)/(\d+)(?:/\d+)?", (link or "").strip())
+    if not m:
+        raise ValueError("kein gültiger Discord-Link zu einem Beitrag")
+    return m.group(1), m.group(2)
+
+
+def message_payload(text):
+    if not text or not text.strip():
+        raise ValueError("Nachricht ist leer")
+    if len(text) > MAX_MESSAGE:
+        raise ValueError(f"Nachricht ist länger als {MAX_MESSAGE} Zeichen")
+    # No pings at all and no link previews (flag 4 = SUPPRESS_EMBEDS).
+    return {"content": text, "allowed_mentions": {"parse": []}, "flags": 4}
+
+
+def _limit_tags(tags, keep):
+    tags = list(tags)
+    while len(tags) > MAX_FORUM_TAGS:
+        tags.pop(max(i for i, t in enumerate(tags) if t != keep))
+    return tags
+
+
+def fixed_tags(applied, tag_ids):
+    drop = {tag_ids.get(TAG_NEW), tag_ids.get(TAG_CONFIRMED)}
+    fixed = tag_ids[TAG_FIXED]
+    tags = [t for t in applied if t not in drop]
+    if fixed not in tags:
+        tags.append(fixed)
+    if len(tags) > MAX_FORUM_TAGS:
+        tags = [t for t in tags if t != tag_ids.get(TAG_NO_BUG)]
+    return _limit_tags(tags, fixed)
+
+
+def in_taiga_tags(applied, tag_ids):
+    mark = tag_ids[TAG_IN_TAIGA]
+    tags = list(applied)
+    if mark in tags:
+        return tags
+    if len(tags) >= MAX_FORUM_TAGS:
+        tags = [t for t in tags if t != tag_ids.get(TAG_NEW)]
+    return _limit_tags(tags + [mark], mark)
+
+
+def new_bug_threads(threads, bugs_channel_id, skip_tag_ids):
+    seen, result = set(), []
+    for th in threads:
+        if th["id"] in seen or th.get("parent_id") != bugs_channel_id \
+                or set(th.get("applied_tags") or []) & set(skip_tag_ids):
+            continue
+        seen.add(th["id"])
+        result.append(th)
+    return sorted(result, key=lambda th: int(th["id"]))
+
+
+def issue_from_thread(thread, starter, tag_names, guild_id):
+    subject = (thread.get("name") or "").strip()
+    if len(subject) > MAX_SUBJECT:
+        subject = subject[:MAX_SUBJECT - 1].rstrip() + "…"
+    # Replace user mentions so no Discord IDs or names land in Taiga.
+    text = re.sub(r"<@!?\d+>", "@jemand", (starter.get("content") or "")).strip() or "(kein Text)"
+    applied = {tag_names.get(t) for t in thread.get("applied_tags") or []}
+    devices = ", ".join(d for d in DEVICE_TAGS if d in applied) or "nicht angegeben"
+    link = f"https://discord.com/channels/{guild_id}/{thread['id']}"
+    return {"subject": subject, "description": f"{text}\n\n**Gerät:** {devices}\n\nDiscord: {link}",
+            "tags": ["bug"]}
+
+
+def issue_ref_for_link(issues, link):
+    return next((i["ref"] for i in issues if discord_link(i.get("description")) == link), None)
+
+
+def import_bug_threads(threads, tag_ids, guild_id, fetch_starter, find_issue, create_issue, set_tags, reply):
+    # The callables do the API work; errors from them end the run before the thread is tagged.
+    tag_names = {v: k for k, v in tag_ids.items()}
+    refs = []
+    for th in threads:
+        # A deleted first message yields None and is imported as "(kein Text)".
+        data = issue_from_thread(th, fetch_starter(th["id"]) or {}, tag_names, guild_id)
+        link = f"https://discord.com/channels/{guild_id}/{th['id']}"
+        ref = find_issue(link)
+        if ref is None:
+            ref = create_issue(data)
+        # Tag only after the issue exists, so a failed run never hides a report.
+        set_tags(th, in_taiga_tags(th.get("applied_tags") or [], tag_ids))
+        reply(th["id"], thanks_text(ref))
+        refs.append(ref)
+    return refs
+
+
+def thanks_text(ref):
+    return f"Danke! Aufgenommen als #{ref}."
+
+
+def epic_news_text(title, text):
+    return f"🎉 **{title}**\n{text}\n{APP_URL}"
+
+
+def bug_news_text(text):
+    return f"Behoben: {text}"
+
+
+def bug_fixed_reply(news_link):
+    return f"Behoben ✅ Mehr dazu: {news_link}"
+
+
+def discord_call(method, path, body=None, token=None, allow_404=False):
+    # path is an API path or a full webhook URL; the error text never contains the URL or a token.
+    is_url = path.startswith("https://")
+    url, shown = (path, "Webhook") if is_url else (DISCORD_API + path, path.split("?")[0])
+    headers = {"Content-Type": "application/json", "User-Agent": DISCORD_USER_AGENT,
+               **({"Authorization": "Bot " + token} if token else {})}
+    data = json.dumps(body).encode() if body is not None else None
+    for attempt in range(2):
+        req = urllib.request.Request(url, method=method, data=data, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as res:
+                raw = res.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as err:
+            if err.code == 429 and attempt == 0:
+                try:
+                    wait = float(json.loads(err.read() or b"{}").get("retry_after", 1))
+                except (ValueError, AttributeError):
+                    wait = 1.0
+                time.sleep(min(wait, 60))
+                continue
+            if err.code == 404 and allow_404:
+                return None
+            sys.exit(f"Discord-Anfrage fehlgeschlagen: {method} {shown} → HTTP {err.code}")
+        except OSError:  # URLError, TimeoutError, connection errors
+            sys.exit(f"Discord nicht erreichbar: {method} {shown}")
 
 
 # --- commands -----------------------------------------------------------------
@@ -316,6 +491,110 @@ def cmd_compare_shots(_, args):
             print(f"{label}: {n}")
 
 
+def cmd_discord_news(_, args):
+    webhook = os.environ.get("DISCORD_NEWS_WEBHOOK", "").strip()
+    if not webhook:
+        print("übersprungen: DISCORD_NEWS_WEBHOOK nicht gesetzt")
+        return
+    if not webhook.startswith(DISCORD_WEBHOOK_PREFIX):
+        sys.exit("DISCORD_NEWS_WEBHOOK ist keine Discord-Webhook-Adresse.")
+    try:
+        payload = message_payload(Path(args.file).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError) as err:
+        sys.exit(f"Text nicht verwendbar: {err}")
+    msg = discord_call("POST", webhook + "?wait=true", payload)
+    info = discord_call("GET", webhook)
+    print(f"https://discord.com/channels/{info['guild_id']}/{info['channel_id']}/{msg['id']}")
+
+
+def cmd_discord_bug_fixed(_, args):
+    token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+    if not token:
+        print("übersprungen: DISCORD_BOT_TOKEN nicht gesetzt")
+        return
+    try:
+        _, thread_id = parse_thread_link(args.post)
+    except ValueError as err:
+        sys.exit(f"Beitrag-Link: {err}")
+    thread = discord_call("GET", f"/channels/{thread_id}", token=token)
+    forum = discord_call("GET", f"/channels/{thread['parent_id']}", token=token)
+    tag_ids = {tag["name"]: tag["id"] for tag in forum.get("available_tags") or []}
+    if TAG_FIXED not in tag_ids:
+        sys.exit(f"Das Forum hat keinen Tag „{TAG_FIXED}“.")
+    discord_call("POST", f"/channels/{thread_id}/messages", message_payload(bug_fixed_reply(args.news)), token)
+    discord_call("PATCH", f"/channels/{thread_id}",
+                 {"applied_tags": fixed_tags(thread.get("applied_tags") or [], tag_ids)}, token)
+    print(f"Beitrag „{thread.get('name', thread_id)}“: Antwort geschrieben, Tag „{TAG_FIXED}“ gesetzt.")
+
+
+def cmd_discord_news_check(t, args):
+    us = t.story(args.ref)
+    epics = us.get("epics") or []
+    if epics:
+        epic = epics[0]
+        stories = []
+        for rel in t.call("GET", f"/epics/{epic['id']}/related_userstories"):
+            other = t.call("GET", f"/userstories/{rel['user_story']}")
+            # This command runs right after the merge, so the story itself already counts as live.
+            status = "Fertig" if other["ref"] == args.ref else other["status_extra_info"]["name"]
+            stories.append({"ref": other["ref"], "status": status})
+        try:
+            wiki = t.call("GET", f"/wiki/by_slug?slug=neuigkeiten&project={t.pid}").get("content") or ""
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                raise
+            wiki = ""
+        due = epic_news_due(stories, news_refs(wiki))
+        print(f"Epic: #{epic['ref']} {epic['subject']} · ankündigen: {'ja' if due else 'nein'}")
+    else:
+        print("Epic: –")
+    tags = {(tag[0] if isinstance(tag, list) else tag).lower() for tag in us.get("tags") or []}
+    print(f"Bug: {'ja' if tags & {'bug', 'hotfix'} else 'nein'}")
+    print(f"Discord-Beitrag: {discord_link(us.get('description')) or '–'}")
+
+
+def cmd_discord_bugs_import(t, _):
+    token = os.environ["DISCORD_BOT_TOKEN"].strip()
+    channels = discord_call("GET", f"/guilds/{DISCORD_GUILD_ID}/channels", token=token)
+    forum = next((c for c in channels if c.get("type") == 15 and c.get("name") == BUGS_FORUM), None)
+    if not forum:
+        sys.exit(f"Forum #{BUGS_FORUM} nicht gefunden.")
+    tag_ids = {tag["name"]: tag["id"] for tag in forum.get("available_tags") or []}
+    if TAG_IN_TAIGA not in tag_ids:
+        sys.exit(f"Das Forum hat keinen Tag „{TAG_IN_TAIGA}“.")
+    skip = {tag_ids[n] for n in (TAG_IN_TAIGA, TAG_NO_BUG) if n in tag_ids}
+    threads = discord_call("GET", f"/guilds/{DISCORD_GUILD_ID}/threads/active", token=token)["threads"] + \
+        discord_call("GET", f"/channels/{forum['id']}/threads/archived/public?limit=50", token=token)["threads"]
+    bug_type = next((it["id"] for it in t.project.get("issue_types") or [] if it["name"] == "Bug"), None)
+    known = []
+
+    def find_issue(link):
+        # The issue list has no description, so load details only for recent bugs.
+        if not known:
+            since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+            recent = [i for i in t.call("GET", f"/issues?project={t.pid}&tags=bug")
+                      if datetime.datetime.fromisoformat(i["created_date"].replace("Z", "+00:00")) >= since]
+            known.append([t.call("GET", f"/issues/{i['id']}") for i in recent])
+        return issue_ref_for_link(known[0], link)
+
+    def create_issue(data):
+        return t.call("POST", "/issues", {"project": t.pid, **data, **({"type": bug_type} if bug_type else {})})["ref"]
+
+    def set_tags(th, tags):
+        patch = {"applied_tags": tags}
+        if (th.get("thread_metadata") or {}).get("archived"):
+            patch["archived"] = False
+        discord_call("PATCH", f"/channels/{th['id']}", patch, token)
+
+    refs = import_bug_threads(
+        new_bug_threads(threads, forum["id"], skip), tag_ids, DISCORD_GUILD_ID,
+        lambda tid: discord_call("GET", f"/channels/{tid}/messages/{tid}", token=token, allow_404=True),
+        find_issue, create_issue, set_tags,
+        lambda tid, text: discord_call("POST", f"/channels/{tid}/messages", message_payload(text), token))
+    print(f"{len(refs)} neue Fehlermeldung(en) übernommen: " + ", ".join(f"#{r}" for r in refs)
+          if refs else "Keine neuen Fehlermeldungen.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Taiga- und Git-Helfer für die Agent-Skills.")
     parser.add_argument("--project", help="Taiga-Projekt-Slug (Standard: aus git remote)")
@@ -350,10 +629,23 @@ def main():
     p = sub.add_parser("compare-shots", help="Screenshots vorher/nachher vergleichen (ohne Taiga)")
     p.add_argument("before")
     p.add_argument("after")
+    p = sub.add_parser("discord-news", help="Text aus Datei in #neuigkeiten posten (ohne Taiga)")
+    p.add_argument("file", help="Datei mit dem Text, höchstens 2000 Zeichen")
+    p = sub.add_parser("discord-bug-fixed", help="Forum-Beitrag als behoben markieren (ohne Taiga)")
+    p.add_argument("post", help="Link zum Beitrag im Forum #bugs")
+    p.add_argument("news", help="Link zur Nachricht in #neuigkeiten")
+    p = sub.add_parser("discord-news-check", help="Epic-Ankündigung, Bug und Discord-Beitrag einer Story")
+    p.add_argument("ref", type=int)
+    sub.add_parser("discord-bugs-import", help="neue Beiträge aus Forum #bugs als Taiga-Issues anlegen")
     args = parser.parse_args()
 
-    if args.command == "compare-shots":
-        return cmd_compare_shots(None, args)
+    if args.command in ("compare-shots", "discord-news", "discord-bug-fixed"):
+        return globals()["cmd_" + args.command.replace("-", "_")](None, args)
+    if args.command == "discord-bugs-import":
+        missing = [n for n in ("DISCORD_BOT_TOKEN", "TAIGA_USERNAME", "TAIGA_PASSWORD")
+                   if not os.environ.get(n, "").strip()]
+        if missing:
+            sys.exit("Fehlende Umgebungsvariablen: " + ", ".join(missing))
     taiga = Taiga(args.project or detect_slug())
     globals()["cmd_" + args.command.replace("-", "_")](taiga, args)
 
