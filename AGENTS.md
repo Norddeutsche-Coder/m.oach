@@ -32,8 +32,13 @@ Alles im Ordner `frontend/`:
 | Lint | `npm run lint` |
 | Formatierung prüfen | `npm run format` (Prettier: ohne Semikolon, einfache Anführungszeichen, Breite 100). Der Bestand ist noch nicht durchformatiert, deshalb nur neue oder geänderte Dateien formatieren, keine Massenformatierung nebenbei. |
 | Unit-Tests | `npm test` (Vitest) |
+| Unit-Tests mit Abdeckung | `npm run test:coverage` |
 | Build | `npm run build` |
 | E2E-Tests | `npx playwright install chromium`, dann `npm run test:e2e` |
+
+Jede Story, die Logik auslagert, hebt die globalen Mindestwerte für Testabdeckung in
+`frontend/vitest.config.ts` auf den neuen Ist-Wert an. Ziel sind mindestens 80 %
+Zeilenabdeckung für `src/lib/` und `src/features/`.
 
 Vor jedem Commit müssen `check`, `lint`, `test`, `build` und `test:e2e` grün sein. Die CI prüft dasselbe.
 

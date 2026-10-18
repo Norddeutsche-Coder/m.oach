@@ -6,5 +6,29 @@ export default defineConfig({
     exclude: ['src/legacy/**', 'legacy-app/**', 'tests/**', 'dist/**'],
     environment: 'node',
     restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/**/*.{js,ts,tsx}'],
+      exclude: [
+        'src/legacy/**',
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/**/types.ts',
+        'src/test/**',
+      ],
+      thresholds: {
+        lines: 23,
+        functions: 15,
+        'src/features/plan/**': {
+          lines: 90,
+          perFile: true,
+        },
+        'src/features/runs/**': {
+          lines: 90,
+          perFile: true,
+        },
+      },
+    },
   },
 })
