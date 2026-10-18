@@ -10,6 +10,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  pull-requests: read
 
 concurrency:
   group: pages
@@ -64,3 +65,43 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Notify Discord
+        continue-on-error: true
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        # Titles are passed via env and encoded with jq so they can never inject shell code.
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::notice::DISCORD_DEPLOY_WEBHOOK is not set, skipping Discord notification."
+            exit 0
+          fi
+          # Prefer the German PR title; fall back to the commit title.
+          pr=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            --jq '[.[] | select(.merged_at != null)][0] // {} | {number, title, html_url}' 2>/dev/null) || pr='{}'
+          jq -e 'type == "object"' <<<"$pr" >/dev/null 2>&1 || pr='{}'
+          title=$(jq -r '.title // empty' <<<"$pr")
+          [ -n "$title" ] || title=$(printf '%s\n' "$COMMIT_MESSAGE" | head -n 1)
+          [ -n "$title" ] || title='Manuell gestartet'
+          payload=$(jq -n \
+            --arg title "${title:0:200}" \
+            --argjson pr "$pr" \
+            --arg short "${SHA:0:7}" \
+            --arg commit "$COMMIT_URL" \
+            --arg page "$PAGE_URL" \
+            '{
+              content: ("🚀 **Neue Version live**\n\($title)\n"
+                + (if $pr.number then "[PR #\($pr.number)](\($pr.html_url)) · " else "" end)
+                + "[`\($short)`](\($commit)) · \($page)"),
+              allowed_mentions: {parse: []},
+              flags: 4
+            }')
+          if ! curl -sS --fail --max-time 10 -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK" -o /dev/null; then
+            echo "::warning::Discord notification failed, the deployment itself succeeded."
+          fi
