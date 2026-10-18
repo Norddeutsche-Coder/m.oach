@@ -31,8 +31,9 @@ Fachlich Unklares wird eine Fragerunde an `lukcy22` am Issue (Format in `docs/wo
 
 1. Neue Stories anlegen (Status `Bereit`, wenn die Definition of Ready erfüllt ist, sonst `Neu`), unten `Gemeldet in Issue #<nr> von <Person>.`, mit dem Epic verknüpfen, `set-points <nr> UX=… Design=… Front=… Back=…`.
 2. Bestehende Stories ergänzen: erweitern, nicht ersetzen, mit Verweis auf das Issue.
-3. `add-watcher <story> <issue>` für jede neue oder ergänzte Story.
-4. Issue beantworten (Alltagssprache, Link zur Story, Hinweis auf die automatische Benachrichtigung) und den Status setzen.
+3. Steht im Issue eine Zeile `Discord: <link>`, übernimm sie unverändert in die Beschreibung der neuen oder ergänzten Story. `finish-taiga-ticket` meldet die Behebung darüber im Discord-Forum.
+4. `add-watcher <story> <issue>` für jede neue oder ergänzte Story.
+5. Issue beantworten (Alltagssprache, Link zur Story, Hinweis auf die automatische Benachrichtigung) und den Status setzen.
 
 ## Abschlussbericht
 
