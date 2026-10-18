@@ -36,6 +36,7 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 - **Definition of Ready:** erfüllt oder fehlende Punkte,
 - **Acceptance Criteria** einzeln mit dem Weg zur Erfüllung,
 - **Schritte** (je höchstens ½ Tag, werden zu Tasks) und **betroffene Dateien**,
+- **Tests:** welche Unit-Tests (Datei `*.test.ts`) und E2E-Tests (`frontend/tests/`) neu entstehen oder sich ändern, je mit dem Fall, den sie absichern,
 - **Fachliche Fragen an `lukcy22`**: Gibt es welche, als Kommentar an die Story stellen (Format in `docs/workflow.md`) und anhalten.
 - **Architektur-Fragen an `fynndow`** mit Alternativen und Empfehlung, im Dialog,
 - **Technische Entscheidungen**, die du selbst triffst,
@@ -54,9 +55,15 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 
 Tasks der Reihe nach: beim Beginn `In Arbeit`, nach Abschluss `Im Test`. Entwurf umsetzen, Abweichungen notieren. Stil der Umgebung, nichts außerhalb des Umfangs (Auffälliges notieren). Ein Task kommt nicht weiter → `Blockiert` mit Kommentar, anhalten.
 
+**Tests gehören zur Umsetzung**, auch wenn die Acceptance Criteria sie nicht ausdrücklich nennen (Definition of Done):
+- Neue oder geänderte Logik bekommt Unit-Tests als `*.test.ts` neben dem Code: Normalfall, Grenzwerte und Sonderfälle. Mit Datum immer mit festem Datum (`vi.setSystemTime`) und zeitzonenunabhängig (AGENTS.md Regel 5).
+- Neues oder geändertes sichtbares Verhalten bekommt E2E-Tests in `frontend/tests/`, mit Testdaten wie in `frontend/tests/fixtures/`.
+- Ein behobener Fehler bekommt einen Test, der ohne die Korrektur fehlschlägt.
+- Ausnahme nur für reine Doku, CI oder Konfiguration ohne Verhalten. Dann im Haltepunkt 2 begründen.
+
 ## Phase 5: Checks und Freigabe (Haltepunkt 2)
 
-Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben, höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, `git diff --stat`, Commit-Nachricht. **Ohne Go kein Commit und kein Push.**
+Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben, höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, **neue und geänderte Tests** mit Datei und Testname (oder die begründete Ausnahme), `git diff --stat`, Commit-Nachricht. Fehlen Tests für neue Logik oder neues Verhalten, ist das kein Stand für ein Go. **Ohne Go kein Commit und kein Push.**
 
 ## Phase 6: Commit und Push (nach Go)
 
