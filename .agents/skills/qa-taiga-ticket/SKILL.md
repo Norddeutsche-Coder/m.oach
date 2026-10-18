@@ -33,11 +33,13 @@ Jede Acceptance Criteria einzeln, unabhängig vom Haken in Taiga: **erfüllt** m
 **Wann:** Der Diff betrifft die Oberfläche (`.tsx`, `.css`, `index.html`, `src/legacy/app.js`, `public/`) oder Logik, die in der App sichtbar wird. Bei Logik baust du Testdaten, die genau den Fall auslösen. Reine Tests, Doku oder CI brauchen keine.
 
 **Matrix nach Risiko** je Szenario:
+
 - Standard: Handy hell und Desktop dunkel,
 - alle vier Kombinationen (Handy/Desktop × hell/dunkel) bei den Tags `sicherheit`, `rls`, `datenverlust` oder wenn `app.css`, Farben oder das Layout geändert sind,
 - `hotfix`: nur das betroffene Szenario auf Handy hell.
 
 **Vorgehen:**
+
 1. Unter `<tmp>/qa-tg-<nr>/` die Worktrees `branch-src` (von `origin/<branch>`) und `basis-src` (von `origin/main`) anlegen. In `frontend/` jeweils `npm ci --silent` (oder `node_modules` verlinken, wenn `package-lock.json` gleich ist), mit den Testwerten aus AGENTS.md bauen und mit `npx vite preview --host 127.0.0.1 --strictPort` auf Port 4181 (nachher) bzw. 4182 (vorher) starten.
 2. `szenarien.json` schreiben (localStorage-Testdaten wie in `frontend/tests/today.spec.ts` und `frontend/tests/fixtures/`, festes Datum, sprechende Namen wie `heute-readiness-8-handy-dunkel`).
 3. Je Stand `node <repo>/.agents/skills/qa-taiga-ticket/scripts/shots.cjs <tmp>/qa-tg-<nr>/branch-src/frontend/node_modules/@playwright/test http://127.0.0.1:<port>/ <tmp>/qa-tg-<nr>/<nachher|vorher> <tmp>/qa-tg-<nr>/szenarien.json`.
@@ -53,7 +55,7 @@ Logik und Sonderfälle, Datum und Zeitzone (AGENTS.md Regel 5), XSS (`innerHTML`
 
 ## 5. Ergebnis in Taiga
 
-- **Befunde:** Story `In Arbeit`, pro Befund ein Task `QA: <kurz>` (Status `Neu`, fünf Angaben). Gleichnamigen offenen QA-Task ergänzen statt doppelt anlegen.
+- **Befunde:** Story `In Arbeit`, pro Befund ein Task `QA: <kurz>` (Status `Neu`, fünf Angaben, gleiche Zuordnung wie die Story). Ist die Story unzugeordnet, keinen Account raten und das im Bericht nennen. Gleichnamigen offenen QA-Task ergänzen statt doppelt anlegen und seine Zuordnung an die Story angleichen.
 - **Bestanden:** Story bleibt `Im Test`. Alle Tasks in `Im Test` auf `Erledigt`. Festlegen, ob nach der Veröffentlichung eine Abnahme nötig ist (sichtbare Änderung, siehe `docs/workflow.md`).
 - **Immer:** alle Screenshots als **eine ZIP** (`python3 -m zipfile -c <tmp>/qa-tg-<nr>/screenshots-tg-<nr>-<sha>.zip <tmp>/qa-tg-<nr>/vorher <tmp>/qa-tg-<nr>/nachher`) mit Taiga-MCP `attachments` hochladen. Kommentar nach `templates/qa-kommentar.md`: bei „bestanden“ ohne „Befunde“, bei „nicht bestanden“ ohne „Abnahme“.
 

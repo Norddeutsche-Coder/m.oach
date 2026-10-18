@@ -292,7 +292,7 @@ test.describe('map style', () => {
     const choice = map.getByRole('combobox', { name: 'Kartenart' })
     await choice.focus()
     await expect(choice).toBeFocused()
-    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('s')
     await expect(choice).toHaveValue('satellite')
   })
 
