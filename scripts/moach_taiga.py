@@ -56,9 +56,16 @@ class Taiga:
             data=json.dumps(body).encode() if body is not None else None,
             headers={"Content-Type": "application/json", "x-disable-pagination": "True",
                      **({"Authorization": "Bearer " + self.token} if self.token else {})})
-        with urllib.request.urlopen(req) as res:
-            raw = res.read()
-            return json.loads(raw) if raw else {}
+        # Only method and path without query in errors: body, query and token stay hidden.
+        shown = f"{method} {path.split('?')[0]}"
+        try:
+            with urllib.request.urlopen(req, timeout=30) as res:
+                raw = res.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as err:
+            sys.exit(f"Taiga-Anfrage fehlgeschlagen: {shown} → HTTP {err.code}")
+        except OSError:  # URLError, TimeoutError, connection errors
+            sys.exit(f"Taiga nicht erreichbar: {shown}")
 
     def story(self, ref):
         return self.call("GET", f"/userstories/by_ref?project={self.pid}&ref={ref}")
@@ -186,6 +193,28 @@ def issue_from_thread(thread, starter, tag_names, guild_id):
             "tags": ["bug"]}
 
 
+def issue_ref_for_link(issues, link):
+    return next((i["ref"] for i in issues if discord_link(i.get("description")) == link), None)
+
+
+def import_bug_threads(threads, tag_ids, guild_id, fetch_starter, find_issue, create_issue, set_tags, reply):
+    # The callables do the API work; errors from them end the run before the thread is tagged.
+    tag_names = {v: k for k, v in tag_ids.items()}
+    refs = []
+    for th in threads:
+        # A deleted first message yields None and is imported as "(kein Text)".
+        data = issue_from_thread(th, fetch_starter(th["id"]) or {}, tag_names, guild_id)
+        link = f"https://discord.com/channels/{guild_id}/{th['id']}"
+        ref = find_issue(link)
+        if ref is None:
+            ref = create_issue(data)
+        # Tag only after the issue exists, so a failed run never hides a report.
+        set_tags(th, in_taiga_tags(th.get("applied_tags") or [], tag_ids))
+        reply(th["id"], thanks_text(ref))
+        refs.append(ref)
+    return refs
+
+
 def thanks_text(ref):
     return f"Danke! Aufgenommen als #{ref}."
 
@@ -202,7 +231,7 @@ def bug_fixed_reply(news_link):
     return f"Behoben ✅ Mehr dazu: {news_link}"
 
 
-def discord_call(method, path, body=None, token=None):
+def discord_call(method, path, body=None, token=None, allow_404=False):
     # path is an API path or a full webhook URL; the error text never contains the URL or a token.
     is_url = path.startswith("https://")
     url, shown = (path, "Webhook") if is_url else (DISCORD_API + path, path.split("?")[0])
@@ -223,8 +252,10 @@ def discord_call(method, path, body=None, token=None):
                     wait = 1.0
                 time.sleep(min(wait, 60))
                 continue
+            if err.code == 404 and allow_404:
+                return None
             sys.exit(f"Discord-Anfrage fehlgeschlagen: {method} {shown} → HTTP {err.code}")
-        except urllib.error.URLError:
+        except OSError:  # URLError, TimeoutError, connection errors
             sys.exit(f"Discord nicht erreichbar: {method} {shown}")
 
 
@@ -534,20 +565,32 @@ def cmd_discord_bugs_import(t, _):
     skip = {tag_ids[n] for n in (TAG_IN_TAIGA, TAG_NO_BUG) if n in tag_ids}
     threads = discord_call("GET", f"/guilds/{DISCORD_GUILD_ID}/threads/active", token=token)["threads"] + \
         discord_call("GET", f"/channels/{forum['id']}/threads/archived/public?limit=50", token=token)["threads"]
-    tag_names = {v: k for k, v in tag_ids.items()}
     bug_type = next((it["id"] for it in t.project.get("issue_types") or [] if it["name"] == "Bug"), None)
-    refs = []
-    for th in new_bug_threads(threads, forum["id"], skip):
-        starter = discord_call("GET", f"/channels/{th['id']}/messages/{th['id']}", token=token)
-        data = issue_from_thread(th, starter, tag_names, DISCORD_GUILD_ID)
-        issue = t.call("POST", "/issues", {"project": t.pid, **data, **({"type": bug_type} if bug_type else {})})
-        # Tag only after the issue exists, so a failed run never hides a report.
-        patch = {"applied_tags": in_taiga_tags(th.get("applied_tags") or [], tag_ids)}
+    known = []
+
+    def find_issue(link):
+        # The issue list has no description, so load details only for recent bugs.
+        if not known:
+            since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+            recent = [i for i in t.call("GET", f"/issues?project={t.pid}&tags=bug")
+                      if datetime.datetime.fromisoformat(i["created_date"].replace("Z", "+00:00")) >= since]
+            known.append([t.call("GET", f"/issues/{i['id']}") for i in recent])
+        return issue_ref_for_link(known[0], link)
+
+    def create_issue(data):
+        return t.call("POST", "/issues", {"project": t.pid, **data, **({"type": bug_type} if bug_type else {})})["ref"]
+
+    def set_tags(th, tags):
+        patch = {"applied_tags": tags}
         if (th.get("thread_metadata") or {}).get("archived"):
             patch["archived"] = False
         discord_call("PATCH", f"/channels/{th['id']}", patch, token)
-        discord_call("POST", f"/channels/{th['id']}/messages", message_payload(thanks_text(issue["ref"])), token)
-        refs.append(issue["ref"])
+
+    refs = import_bug_threads(
+        new_bug_threads(threads, forum["id"], skip), tag_ids, DISCORD_GUILD_ID,
+        lambda tid: discord_call("GET", f"/channels/{tid}/messages/{tid}", token=token, allow_404=True),
+        find_issue, create_issue, set_tags,
+        lambda tid, text: discord_call("POST", f"/channels/{tid}/messages", message_payload(text), token))
     print(f"{len(refs)} neue Fehlermeldung(en) übernommen: " + ", ".join(f"#{r}" for r in refs)
           if refs else "Keine neuen Fehlermeldungen.")
 

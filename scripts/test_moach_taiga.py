@@ -2,8 +2,11 @@
 # No network, no environment variables, no dates.
 # Run: python3 -m unittest discover -s scripts -p 'test_*.py'
 import importlib.util
+import io
 import unittest
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location("moach_taiga", Path(__file__).with_name("moach_taiga.py"))
 mt = importlib.util.module_from_spec(_SPEC)
@@ -340,6 +343,285 @@ class TextTemplatesTest(unittest.TestCase):
     def test_bug_fixed_reply(self):
         link = f"https://discord.com/channels/{GUILD_ID}/1561383271823315300/{MESSAGE_ID}"
         self.assertEqual(mt.bug_fixed_reply(link), f"Behoben ✅ Mehr dazu: {link}")
+
+
+class InTaigaTagsTest(unittest.TestCase):
+    def test_empty_applied(self):
+        self.assertEqual(mt.in_taiga_tags([], TAG_IDS), ids("In Taiga"))
+
+    def test_already_present_unchanged(self):
+        applied = ids("Neu", "In Taiga", "iPhone")
+        self.assertEqual(mt.in_taiga_tags(applied, TAG_IDS), ids("Neu", "In Taiga", "iPhone"))
+
+    def test_three_tags_appended_in_order(self):
+        applied = ids("Neu", "Android", "Desktop")
+        self.assertEqual(mt.in_taiga_tags(applied, TAG_IDS), ids("Neu", "Android", "Desktop", "In Taiga"))
+
+    def test_exactly_four_tags_keeps_all(self):
+        applied = ids("Neu", "iPhone", "Android", "Desktop")
+        self.assertEqual(mt.in_taiga_tags(applied, TAG_IDS),
+                         ids("Neu", "iPhone", "Android", "Desktop", "In Taiga"))
+
+    def test_exactly_five_with_new_drops_new(self):
+        applied = ids("Neu", "Bestätigt", "iPhone", "Android", "Desktop")
+        self.assertEqual(mt.in_taiga_tags(applied, TAG_IDS),
+                         ids("Bestätigt", "iPhone", "Android", "Desktop", "In Taiga"))
+
+    def test_exactly_five_without_new_drops_last(self):
+        applied = ids("Bestätigt", "iPhone", "Android", "Desktop", "Kein Bug")
+        self.assertEqual(mt.in_taiga_tags(applied, TAG_IDS),
+                         ids("Bestätigt", "iPhone", "Android", "Desktop", "In Taiga"))
+
+    def test_never_more_than_five(self):
+        applied = ids("Bestätigt", "iPhone", "Android", "Desktop", "Kein Bug", "Behoben")
+        result = mt.in_taiga_tags(applied, TAG_IDS)
+        self.assertLessEqual(len(result), 5)
+        self.assertIn(TAG_IDS["In Taiga"], result)
+
+    def test_no_duplicate(self):
+        for applied in ([], ids("In Taiga"), ids("Neu", "iPhone", "In Taiga", "Android", "Desktop"),
+                        ids("Neu", "Bestätigt", "iPhone", "Android", "Desktop")):
+            result = mt.in_taiga_tags(applied, TAG_IDS)
+            self.assertEqual(result.count(TAG_IDS["In Taiga"]), 1)
+            self.assertEqual(len(result), len(set(result)))
+
+
+def described(ref, link):
+    return {"ref": ref, "description": f"Der Plan lädt nicht.\n\n**Gerät:** iPhone\n\nDiscord: {link}"}
+
+
+class IssueRefForLinkTest(unittest.TestCase):
+    def test_match_in_middle_of_description(self):
+        issues = [described(12, f"https://discord.com/channels/{GUILD_ID}/1561383271823315111"),
+                  {"ref": 14, "description": f"Text oben\nDiscord: {THREAD_LINK}\nText unten"},
+                  described(15, THREAD_LINK)]
+        self.assertEqual(mt.issue_ref_for_link(issues, THREAD_LINK), 14)
+
+    def test_no_match(self):
+        issues = [described(12, f"https://discord.com/channels/{GUILD_ID}/1561383271823315111"),
+                  {"ref": 13, "description": "Ohne Discord-Link"}]
+        self.assertIsNone(mt.issue_ref_for_link(issues, THREAD_LINK))
+
+    def test_description_none(self):
+        issues = [{"ref": 11, "description": None}, described(16, THREAD_LINK)]
+        self.assertEqual(mt.issue_ref_for_link(issues, THREAD_LINK), 16)
+        self.assertIsNone(mt.issue_ref_for_link([{"ref": 11, "description": None}], THREAD_LINK))
+
+    def test_similar_link_other_thread_id(self):
+        issues = [described(17, THREAD_LINK + "1"), described(18, THREAD_LINK[:-1] + "6")]
+        self.assertIsNone(mt.issue_ref_for_link(issues, THREAD_LINK))
+
+    def test_empty_list(self):
+        self.assertIsNone(mt.issue_ref_for_link([], THREAD_LINK))
+
+
+FIRST_ID = "1561383271823315401"
+SECOND_ID = "1561383271823315402"
+
+
+def link_of(tid):
+    return f"https://discord.com/channels/{GUILD_ID}/{tid}"
+
+
+class ImportBugThreadsTest(unittest.TestCase):
+    def run_import(self, threads, starters, existing=None, create_error=None):
+        calls, next_ref = [], iter([301, 302, 303])
+        existing = existing or {}
+
+        def fetch_starter(tid):
+            calls.append(("fetch_starter", tid))
+            return starters.get(tid)
+
+        def find_issue(link):
+            calls.append(("find_issue", link))
+            return existing.get(link)
+
+        def create_issue(data):
+            calls.append(("create_issue", data))
+            if create_error:
+                raise create_error
+            return next(next_ref)
+
+        def set_tags(th, tags):
+            calls.append(("set_tags", th["id"], tags))
+
+        def reply(tid, text):
+            calls.append(("reply", tid, text))
+
+        refs = mt.import_bug_threads(threads, TAG_IDS, GUILD_ID, fetch_starter, find_issue,
+                                     create_issue, set_tags, reply)
+        return refs, calls
+
+    def test_call_order_create_then_tag_then_reply(self):
+        threads = [thread(FIRST_ID, tags=("Neu", "iPhone"), name="Plan lädt nicht"),
+                   thread(SECOND_ID, tags=("Android",), name="Kalender leer")]
+        starters = {FIRST_ID: {"content": "Seit heute weiß."}, SECOND_ID: {"content": "Nichts zu sehen."}}
+        refs, calls = self.run_import(threads, starters)
+        self.assertEqual(refs, [301, 302])
+        self.assertEqual([c[0] for c in calls],
+                         ["fetch_starter", "find_issue", "create_issue", "set_tags", "reply"] * 2)
+        self.assertEqual(calls[1], ("find_issue", link_of(FIRST_ID)))
+        self.assertEqual(calls[2][1]["subject"], "Plan lädt nicht")
+        self.assertEqual(calls[3], ("set_tags", FIRST_ID, mt.in_taiga_tags(ids("Neu", "iPhone"), TAG_IDS)))
+        self.assertEqual(calls[4], ("reply", FIRST_ID, mt.thanks_text(301)))
+        self.assertEqual(calls[9], ("reply", SECOND_ID, mt.thanks_text(302)))
+
+    def test_issue_data_from_thread(self):
+        th = thread(FIRST_ID, tags=("Neu", "iPhone"), name="Plan lädt nicht")
+        starter = {"content": "Seit heute weiß."}
+        _, calls = self.run_import([th], {FIRST_ID: starter})
+        create = [c for c in calls if c[0] == "create_issue"]
+        self.assertEqual(create, [("create_issue", mt.issue_from_thread(th, starter, TAG_NAMES, GUILD_ID))])
+
+    def test_deleted_starter_does_not_block_others(self):
+        threads = [thread(FIRST_ID, tags=("Neu",), name="Erste Nachricht gelöscht"),
+                   thread(SECOND_ID, tags=("Neu",), name="Zweiter Fehler")]
+        refs, calls = self.run_import(threads, {SECOND_ID: {"content": "Text da."}})
+        self.assertEqual(refs, [301, 302])
+        creates = [c[1] for c in calls if c[0] == "create_issue"]
+        self.assertIn("(kein Text)", creates[0]["description"])
+        self.assertIn("Text da.", creates[1]["description"])
+        self.assertEqual([c[1] for c in calls if c[0] == "reply"], [FIRST_ID, SECOND_ID])
+
+    def test_existing_issue_not_created_again(self):
+        threads = [thread(FIRST_ID, tags=("Neu", "Desktop"), name="Schon importiert")]
+        refs, calls = self.run_import(threads, {FIRST_ID: {"content": "Doppelt?"}},
+                                      existing={link_of(FIRST_ID): 250})
+        self.assertEqual(refs, [250])
+        self.assertNotIn("create_issue", [c[0] for c in calls])
+        self.assertIn(("set_tags", FIRST_ID, mt.in_taiga_tags(ids("Neu", "Desktop"), TAG_IDS)), calls)
+        self.assertIn(("reply", FIRST_ID, mt.thanks_text(250)), calls)
+
+    def test_create_error_not_swallowed_and_no_tag(self):
+        threads = [thread(FIRST_ID, tags=("Neu",), name="Taiga down"),
+                   thread(SECOND_ID, tags=("Neu",), name="Danach")]
+        with self.assertRaises(RuntimeError):
+            self.run_import(threads, {FIRST_ID: {"content": "x"}, SECOND_ID: {"content": "y"}},
+                            create_error=RuntimeError("Taiga-Anfrage fehlgeschlagen"))
+
+    def test_create_error_records_no_set_tags(self):
+        calls = []
+
+        def create_issue(_):
+            calls.append("create_issue")
+            raise RuntimeError("Taiga-Anfrage fehlgeschlagen")
+
+        with self.assertRaises(RuntimeError):
+            mt.import_bug_threads([thread(FIRST_ID, tags=("Neu",))], TAG_IDS, GUILD_ID,
+                                  lambda tid: {"content": "x"}, lambda link: None, create_issue,
+                                  lambda th, tags: calls.append("set_tags"),
+                                  lambda tid, text: calls.append("reply"))
+        self.assertEqual(calls, ["create_issue"])
+
+    def test_empty_list(self):
+        refs, calls = self.run_import([], {})
+        self.assertEqual(refs, [])
+        self.assertEqual(calls, [])
+
+    def test_reply_text_is_thanks_text(self):
+        refs, calls = self.run_import([thread(FIRST_ID, tags=("Neu",))], {FIRST_ID: {"content": "x"}})
+        self.assertEqual([c for c in calls if c[0] == "reply"], [("reply", FIRST_ID, "Danke! Aufgenommen als #301.")])
+
+
+WEBHOOK_URL = "https://discord.com/api/webhooks/123/geheim-webhook-token"
+
+
+def http_error(code, url="https://example.invalid/"):
+    return urllib.error.HTTPError(url, code, "Not Found" if code == 404 else "Error", {}, io.BytesIO(b"{}"))
+
+
+def exit_message(cm):
+    return str(cm.exception.code)
+
+
+class DiscordCallErrorsTest(unittest.TestCase):
+    def test_timeout_is_readable_exit(self):
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(SystemExit) as cm:
+                mt.discord_call("GET", "/channels/1/threads/archived/public")
+        self.assertTrue(exit_message(cm).startswith("Discord nicht erreichbar"), exit_message(cm))
+
+    def test_webhook_url_hidden_on_timeout(self):
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(SystemExit) as cm:
+                mt.discord_call("POST", WEBHOOK_URL, {"content": "Hallo"})
+        self.assertIn("Webhook", exit_message(cm))
+        self.assertNotIn("geheim-webhook-token", exit_message(cm))
+
+    def test_webhook_url_hidden_on_http_error(self):
+        with mock.patch("urllib.request.urlopen", side_effect=http_error(403, WEBHOOK_URL)):
+            with self.assertRaises(SystemExit) as cm:
+                mt.discord_call("POST", WEBHOOK_URL, {"content": "Hallo"})
+        self.assertIn("Webhook", exit_message(cm))
+        self.assertNotIn("geheim-webhook-token", exit_message(cm))
+
+    def test_bot_token_hidden(self):
+        for err in (TimeoutError("timed out"), urllib.error.URLError("bot-geheim"), http_error(401)):
+            with mock.patch("urllib.request.urlopen", side_effect=err):
+                with self.assertRaises(SystemExit) as cm:
+                    mt.discord_call("GET", "/guilds/1/threads/active", token="bot-geheim")
+            self.assertNotIn("bot-geheim", exit_message(cm))
+
+    def test_404_allowed_returns_none(self):
+        with mock.patch("urllib.request.urlopen", side_effect=http_error(404)):
+            self.assertIsNone(mt.discord_call("GET", "/channels/1/messages/2", allow_404=True))
+
+    def test_404_not_allowed_exits(self):
+        with mock.patch("urllib.request.urlopen", side_effect=http_error(404)):
+            with self.assertRaises(SystemExit) as cm:
+                mt.discord_call("GET", "/channels/1/messages/2")
+        self.assertIn("HTTP 404", exit_message(cm))
+
+
+def bare_taiga(token=None):
+    t = mt.Taiga.__new__(mt.Taiga)
+    t.token = token
+    return t
+
+
+class TaigaCallErrorsTest(unittest.TestCase):
+    def test_url_error_is_readable_exit(self):
+        with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("no route")):
+            with self.assertRaises(SystemExit) as cm:
+                bare_taiga().call("GET", "/projects/by_slug?slug=fynndow-moach")
+        self.assertTrue(exit_message(cm).startswith("Taiga nicht erreichbar"), exit_message(cm))
+
+    def test_timeout_is_readable_exit(self):
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(SystemExit) as cm:
+                bare_taiga().call("GET", "/issues?project=1")
+        self.assertTrue(exit_message(cm).startswith("Taiga nicht erreichbar"), exit_message(cm))
+
+    def test_http_401(self):
+        with mock.patch("urllib.request.urlopen", side_effect=http_error(401)):
+            with self.assertRaises(SystemExit) as cm:
+                bare_taiga().call("GET", "/users/me")
+        self.assertIn("Taiga-Anfrage fehlgeschlagen", exit_message(cm))
+        self.assertIn("HTTP 401", exit_message(cm))
+
+    def test_query_hidden_path_shown(self):
+        path = "/issues?project=1&q=geheim-query"
+        for err in (http_error(500, "https://api.taiga.io/api/v1" + path), TimeoutError("timed out"),
+                    urllib.error.URLError("no route")):
+            with mock.patch("urllib.request.urlopen", side_effect=err):
+                with self.assertRaises(SystemExit) as cm:
+                    bare_taiga().call("GET", path)
+            self.assertNotIn("geheim-query", exit_message(cm))
+            self.assertIn("/issues", exit_message(cm))
+
+    def test_body_hidden(self):
+        for err in (http_error(401), TimeoutError("timed out")):
+            with mock.patch("urllib.request.urlopen", side_effect=err):
+                with self.assertRaises(SystemExit) as cm:
+                    bare_taiga().call("POST", "/auth", {"password": "geheim-passwort"})
+            self.assertNotIn("geheim-passwort", exit_message(cm))
+
+    def test_token_hidden(self):
+        for err in (http_error(403), TimeoutError("timed out"), urllib.error.URLError("no route")):
+            with mock.patch("urllib.request.urlopen", side_effect=err):
+                with self.assertRaises(SystemExit) as cm:
+                    bare_taiga("geheim-token").call("GET", "/users/me")
+            self.assertNotIn("geheim-token", exit_message(cm))
 
 
 if __name__ == "__main__":

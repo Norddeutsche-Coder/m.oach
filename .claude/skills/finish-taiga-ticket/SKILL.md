@@ -49,7 +49,7 @@ Zeig die Ausgabe von `finish-check`, `git diff --stat origin/main...origin/<bran
    - Bei `Epic … ankündigen: ja`: einen Text nach `epic_news_text` vorschlagen („Kurz gesagt“, nur der Nutzen für Läufer, ohne Fachbegriffe).
    - Bei `Bug: ja`: einen Text nach `bug_news_text` vorschlagen (`Behoben: …`).
    - Nach Go den Text in eine Datei unter `<tmp>` schreiben und `discord-news <datei>` ausführen. Die Ausgabe ist der Link zur Nachricht.
-   - Bei `Discord-Beitrag: <link>` danach `discord-bug-fixed <link> <news-link>` ausführen.
+   - Bei `Discord-Beitrag: <link>` danach `discord-bug-fixed <link> <news-link>` ausführen. Wurde `discord-news` übersprungen oder nichts gepostet, nimm als `<news-link>` die App-URL `https://norddeutsche-coder.github.io/m.oach/`.
    - Sonst nichts posten. Rein technische Stories posten nie. Keine Erwähnungen. Meldet ein Befehl `übersprungen: …`, weil eine Variable fehlt, weitermachen und es im Abschlussbericht nennen.
 5. Bei Abnahme: Kommentar nach `templates/zur-abnahme.md` an die nicht zugeordnete Person.
 6. Aufräumen: Remote-Branch löschen, falls noch da, lokal `git switch main && git pull --ff-only && git branch -d <branch>` (bei Weigerung fragen).
