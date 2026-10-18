@@ -10,6 +10,7 @@ backend/supabase/.temp/
 backend/supabase/.branches/
 playwright-report/
 test-results/
+coverage/
 
 # Logs
 logs/
