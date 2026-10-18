@@ -5,7 +5,7 @@ import { createLifecycle } from '../lib/lifecycle'
 import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
-import { longRunHint } from '../features/plan/wizard'
+import { longRunHint, longRunLimit } from '../features/plan/wizard'
 import { supabaseConfig } from '../config/supabase'
 
 export function initializeLegacyApp({ onTabChange, onCoachChange, onTodayChange }) {
@@ -1819,7 +1819,7 @@ function buildCfg(a){
  if(mt){const i2=roles.indexOf('q2');if(a.q<2&&i2>=0)roles[i2]='easy';const i1=roles.indexOf('q1');if(a.q<1&&i1>=0)roles[i1]='easy'}
  const raw={easy:.19,str:.16,q1:.22,q2:.22},W=roles.map(r=>raw[r]||0),sm=W.reduce((x,y)=>x+y,0)||1;
  const strD=seq.filter(x=>x.k!=1&&(roles[x.d]=='easy'||roles[x.d]=='str')).slice(0,a.str).map(x=>x.d);
- const cap=a.cap,tl=TP[N-1].tl.map(f=>Math.round(cap*f)),Wn=W.map(x=>x/sm);
+ const cap=a.cap,tl=TP[N-1].tl.map(f=>Math.min(Math.round(cap*f),longRunLimit(a.peak,cap))),Wn=W.map(x=>x/sm);
  if(mt)return{tw,T:[tw+1,0,0,0,0],S:0,A:[[tw,a.cur]],cap,ls:clampN(cap/a.cur,.25,.4),tl,roles,W:Wn,strD,test:-1,recov:-1,first:999,fw:[],mul:false,mode:'maintain'};
  let S0=clampN(Math.round(tw*.265),6,13),T4=N+S0,T3=T4+4,n=tw-T3+1;
  const test=tw>=24&&n>=8;let T,Sx;
@@ -1940,9 +1940,9 @@ function openWizard(mode){
   wz.querySelectorAll('[data-rd]').forEach(c=>c.onclick=()=>{const i=+c.dataset.rd,k=a.rest.indexOf(i);read();if(k>=0)a.rest.splice(k,1);else a.rest.push(i);a.rest.sort();draw()});
   wz.querySelectorAll('[data-sn]').forEach(c=>c.onclick=()=>{read();a.str=+c.dataset.sn;draw()});
   if(step==4)pv();
-  $('#wn').onclick=()=>{read();const e=bad(),eb=$('#wze');if(e){eb.textContent=e;eb.hidden=false;eb.scrollIntoView({block:'nearest'});return}
+  $('#wn').onclick=()=>{read();const e=bad(),eb=$('#wze');if(e){const hb0=$('#wzh');if(hb0){hb0.hidden=true;hb0.dataset.k=''}eb.textContent=e;eb.hidden=false;eb.scrollIntoView({block:'nearest'});return}
    // A long run above half the peak is allowed: the first tap explains what the plan makes of it, the second continues.
-   if(step==2){const h=longRunHint(a.peak,a.cap),hb=$('#wzh'),k=a.peak+'/'+a.cap;if(h&&hb&&hb.dataset.k!==k){eb.hidden=true;hb.textContent=h;hb.dataset.k=k;hb.hidden=false;hb.scrollIntoView({block:'nearest'});return}}
+   if(step==2){const h=longRunHint(a.peak,a.cap,{maintain:mt()}),hb=$('#wzh'),k=a.peak+'/'+a.cap;if(h&&hb&&hb.dataset.k!==k){eb.hidden=true;hb.textContent=h;hb.dataset.k=k;hb.hidden=false;hb.scrollIntoView({block:'nearest'});return}}
    if(step<NS-1){step++;draw();wz.scrollTop=0;return}
    const st=wzState(a);
    S.prevPlan=snapPlan();archivePlan(st.start);

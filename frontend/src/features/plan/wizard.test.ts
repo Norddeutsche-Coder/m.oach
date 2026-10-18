@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { longRunHint, plannedLongRun } from './wizard'
+import { longRunHint, longRunLimit, plannedLongRun } from './wizard'
 
 describe('planned long run', () => {
   it.each([
@@ -37,5 +37,46 @@ describe('long run hint', () => {
   it('shows no hint without a valid peak volume', () => {
     expect(longRunHint(0, 31)).toBeNull()
     expect(longRunHint(Number.NaN, 31)).toBeNull()
+  })
+})
+
+describe('long run rules by plan type', () => {
+  it('plans a quarter of the week for race plans below 30 km/week', () => {
+    expect(plannedLongRun(25, 16)).toBe(6)
+    expect(plannedLongRun(20, 12)).toBe(5)
+  })
+
+  it('keeps the 40 % rule for "Ausdauer erhalten" below 30 km/week', () => {
+    expect(plannedLongRun(25, 16, { maintain: true })).toBe(10)
+  })
+
+  it('limits taper long runs by the 25–40 % rule', () => {
+    expect(longRunLimit(45, 45)).toBe(18)
+    expect(longRunLimit(40, 45)).toBe(16)
+    expect(longRunLimit(55, 20)).toBe(20)
+  })
+
+  it('leaves taper long runs of all previously allowed inputs unchanged', () => {
+    const taperShares = [0.41, 0.45, 0.53, 0.55, 0.65, 0.71, 0.8]
+    for (let peak = 10; peak <= 220; peak++)
+      for (let cap = 8; cap <= Math.min(45, peak * 0.5); cap++)
+        for (const f of taperShares) {
+          const taper = Math.round(cap * f)
+          expect(Math.min(taper, longRunLimit(peak, cap))).toBe(taper)
+        }
+  })
+})
+
+describe('long run hint wording', () => {
+  it('names the quarter rule for race plans below 30 km/week', () => {
+    expect(longRunHint(25, 16)).toBe(
+      'Hinweis: Dein längster Lauf ist mehr als die Hälfte deines Höchstumfangs. Im Plan wird er in den umfangreichsten Wochen etwa 6 km lang, weil der längste Lauf bei weniger als 30 km pro Woche ein Viertel des Wochenumfangs ist.',
+    )
+  })
+
+  it('talks about the weekly volume for "Ausdauer erhalten"', () => {
+    expect(longRunHint(40, 25, { maintain: true })).toBe(
+      'Hinweis: Dein längster Lauf ist mehr als die Hälfte deines Wochenumfangs. Im Plan wird er etwa 16 km lang, weil ein Lauf höchstens 40 % des Wochenumfangs ausmacht.',
+    )
   })
 })

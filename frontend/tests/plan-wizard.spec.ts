@@ -149,3 +149,92 @@ test('changing the numbers after the hint shows it again', async ({ page }) => {
   await expect(wizard.locator('#wzh')).toContainText('etwa 28 km')
   await expect(wizard).toContainText('Schritt 3 von 5')
 })
+
+async function openWizard(page: Page) {
+  await seed(page)
+  await page.goto('/')
+  await page
+    .getByRole('navigation', { name: 'Hauptmenü' })
+    .getByRole('button', { name: 'Kalender', exact: true })
+    .click()
+  await page.locator('#wzgo').click()
+  return page.locator('#wz')
+}
+
+async function toVolumeStep(wizard: ReturnType<Page['locator']>) {
+  await wizard.locator('#wn').click()
+  await wizard.locator('#wn').click()
+  await expect(wizard).toContainText('Schritt 3 von 5')
+}
+
+const longestRun = async (wizard: ReturnType<Page['locator']>) =>
+  Number((await wizard.innerText()).match(/(\d+) km\s+längster Lauf/)![1])
+
+test('a 5 km plan below 30 km/week names the quarter rule and matches the preview', async ({
+  page,
+}) => {
+  const wizard = await openWizard(page)
+  await wizard.locator('[data-ty="5"]').click()
+  await toVolumeStep(wizard)
+  await wizard.locator('#wc').fill('20')
+  await wizard.locator('#wp').fill('25')
+  await wizard.locator('#wl').fill('16')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wzh')).toContainText(
+    'etwa 6 km lang, weil der längste Lauf bei weniger als 30 km pro Woche ein Viertel des Wochenumfangs ist.',
+  )
+  await wizard.locator('#wn').click()
+  await wizard.locator('#wn').click()
+  await expect(wizard).toContainText('Schritt 5 von 5')
+  expect(await longestRun(wizard)).toBe(6)
+})
+
+test('taper long runs stay within the peak week limit', async ({ page }) => {
+  const wizard = await openWizard(page)
+  await wizard.locator('[data-ty="42.195"]').click()
+  await wizard.locator('[data-tp="4"]').click()
+  await toVolumeStep(wizard)
+  await wizard.locator('#wc').fill('40')
+  await wizard.locator('#wp').fill('45')
+  await wizard.locator('#wl').fill('45')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wzh')).toContainText('etwa 18 km lang')
+  await wizard.locator('#wn').click()
+  await wizard.locator('#wn').click()
+  await expect(wizard).toContainText('Schritt 5 von 5')
+  expect(await longestRun(wizard)).toBeLessThanOrEqual(18)
+})
+
+test('"Ausdauer erhalten" talks about the weekly volume', async ({ page }) => {
+  const wizard = await openWizard(page)
+  await wizard.locator('[data-ty="m"]').click()
+  await toVolumeStep(wizard)
+  await expect(wizard.locator('#wp')).toHaveCount(0)
+  await wizard.locator('#wc').fill('40')
+  await wizard.locator('#wl').fill('25')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wzh')).toHaveText(
+    'Hinweis: Dein längster Lauf ist mehr als die Hälfte deines Wochenumfangs. Im Plan wird er etwa 16 km lang, weil ein Lauf höchstens 40 % des Wochenumfangs ausmacht.',
+  )
+})
+
+test('an invalid value after the hint shows only the error, the hint returns once corrected', async ({
+  page,
+}) => {
+  const wizard = await openWizard(page)
+  await toVolumeStep(wizard)
+  await wizard.locator('#wc').fill('50')
+  await wizard.locator('#wp').fill('55')
+  await wizard.locator('#wl').fill('31')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wzh')).toBeVisible()
+  await wizard.locator('#wl').fill('50')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wze')).toBeVisible()
+  await expect(wizard.locator('#wzh')).toBeHidden()
+  await wizard.locator('#wl').fill('31')
+  await wizard.locator('#wn').click()
+  await expect(wizard.locator('#wze')).toBeHidden()
+  await expect(wizard.locator('#wzh')).toBeVisible()
+  await expect(wizard).toContainText('Schritt 3 von 5')
+})
