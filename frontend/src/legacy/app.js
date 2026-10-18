@@ -5,6 +5,7 @@ import { createLifecycle } from '../lib/lifecycle'
 import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
+import { longRunHint } from '../features/plan/wizard'
 import { supabaseConfig } from '../config/supabase'
 
 export function initializeLegacyApp({ onTabChange, onCoachChange, onTodayChange }) {
@@ -1901,7 +1902,7 @@ function openWizard(mode){
   if(step==0&&!mt()){if(!a.race||parse(a.race)<=today)return'Das Rennen muss in der Zukunft liegen.';const g=(+a.gh)*3600+(+a.gm)*60+(+a.gs),pc=g/a.rd;if(!g||pc<150||pc>540)return'Bitte gib eine realistische Zielzeit ein (Pace zwischen 2:30 und 9:00 min/km).'}
   if(step==0&&!mt()&&(a.tune||[]).some(t=>t.d>tuneLimit(a.race)))return'Ein Vorbereitungswettkampf liegt zu nah am Hauptrennen (mindestens 2 Wochen Abstand) oder danach.';
   if(step==1){const sec=(+a.rh)*3600+(+a.rm)*60+(+a.rs),pc=sec/a.rk;if(!sec||pc<150||pc>540)return'Bitte gib eine realistische Zeit für die gewählte Distanz ein (Pace zwischen 2:30 und 9:00 min/km).'}
-  if(step==2){if(!(a.cur>=10&&a.cur<=200))return'Der aktuelle Wochenumfang sollte zwischen 10 und 200 km liegen.';if(!mt()&&!(a.peak>=a.cur&&a.peak<=220))return'Der Höchstumfang muss mindestens so hoch wie dein aktueller Umfang sein (max. 220 km).';if(!(a.cap>=8&&a.cap<=45))return'Der längste Lauf sollte zwischen 8 und 45 km liegen.';if(a.cap>a.peak*.5)return'Der längste Lauf darf höchstens die Hälfte deines Wochenumfangs sein (bei '+a.peak+' km also '+Math.floor(a.peak*.5)+' km).'}
+  if(step==2){if(!(a.cur>=10&&a.cur<=200))return'Der aktuelle Wochenumfang sollte zwischen 10 und 200 km liegen.';if(!mt()&&!(a.peak>=a.cur&&a.peak<=220))return'Der Höchstumfang muss mindestens so hoch wie dein aktueller Umfang sein (max. 220 km).';if(!(a.cap>=8&&a.cap<=45))return'Der längste Lauf sollte zwischen 8 und 45 km liegen.';}
   if(step==3){if(a.rest.length<1||a.rest.length>3)return'Wähle 1 bis 3 Ruhetage (so kommst du auf 4 bis 6 Läufe pro Woche).';if(a.rest.includes(a.lg))return'Der Longrun-Tag darf kein Ruhetag sein.'}
   if(step==4){if(parse(a.start)<today)return'Das Startdatum darf nicht in der Vergangenheit liegen.';if(!mt()&&parse(a.start)>parse(a.race))return'Der Start liegt nach dem Rennen. Bitte wähle ein früheres Startdatum.'}
   return''};
@@ -1920,7 +1921,7 @@ function openWizard(mode){
   if(step==2)b='<div class="sub">'+(mt()?'Wie viel läufst du pro Woche, und wie weit ist dein längster Lauf?':'Wie viel läufst du jetzt, und wie weit soll der Plan dich bringen?')+'</div><div class="f">'+num('wc',mt()?'Umfang halten (km/Woche)':'Aktuell km pro Woche',a.cur,'min="10" max="200"')+(mt()?'':num('wp','Höchstumfang km',a.peak,'min="10" max="220"'))+num('wl','Längster Lauf km',a.cap,'min="8" max="45"')+'</div><small>'+(mt()?'Der Umfang bleibt gleich, jede 4. Woche etwas leichter.':'Der Aufbau sollte bei etwa 8–10 % pro Woche liegen. Der längste Lauf liegt beim Marathon meist bei 28–35 km.')+'</small>';
   if(step==3)b='<div class="sub">An welchen Tagen willst du nicht laufen?</div><div class="cr" id="wrd">'+DOW.map((x,i)=>'<button class="chip '+(a.rest.includes(i)?'on':'')+'" data-rd="'+i+'" aria-pressed="'+a.rest.includes(i)+'">'+x+'</button>').join('')+'</div><div class="sub">'+(7-a.rest.length)+' Läufe pro Woche</div><div class="f"><label>Longrun-Tag<select id="wlg">'+WDL.map((x,i)=>'<option value="'+i+'"'+(a.lg==i?' selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+(mt()?'<div class="sub" style="margin-top:10px">Tempoeinheiten pro Woche</div>'+chipRow([[0,'Keine'],[1,'1×'],[2,'2×']],v=>a.q==v,'data-q'):'')+'<div class="sub" style="margin-top:10px">Krafttraining zu Hause pro Woche</div>'+chipRow([[0,'Keins'],[1,'1×'],[2,'2×']],v=>a.str==v,'data-sn')+'<small>Kraft (20–25 min) wird nach lockeren Läufen eingeplant, mit Übungen und Anleitung.</small>';
   if(step==4)b='<div class="sub">Ab wann soll der Plan starten?'+(mode=='adjust'?' Bisherige Läufe und die frühere Planung bleiben im Kalender erhalten.':'')+'</div><div class="f"><label>Startdatum<input id="ws" type="date" min="'+iso(today)+'" value="'+esc(a.start)+'"></label></div><div id="wpv"></div>';
-  wz.innerHTML='<div class="cbox"><div class="ch"><div><h3>'+(mode=='adjust'?'Plan anpassen':'Plan-Assistent')+'</h3><small>Schritt '+(step+1)+' von '+NS+' · '+T+'</small></div><button id="wx" aria-label="Schließen">✕</button></div><div class="bar" style="margin:10px 0 14px"><i style="width:'+((step+1)/NS*100)+'%;background:var(--pri)"></i></div>'+b+'<div id="wze" class="aerr" hidden></div><div class="b" style="margin-top:14px">'+(step>0?'<button id="wb" style="padding:12px 18px">Zurück</button>':'')+'<button class="pri" id="wn" style="flex:1;padding:12px">'+(step==NS-1?'Plan übernehmen':'Weiter')+'</button></div></div>';
+  wz.innerHTML='<div class="cbox"><div class="ch"><div><h3>'+(mode=='adjust'?'Plan anpassen':'Plan-Assistent')+'</h3><small>Schritt '+(step+1)+' von '+NS+' · '+T+'</small></div><button id="wx" aria-label="Schließen">✕</button></div><div class="bar" style="margin:10px 0 14px"><i style="width:'+((step+1)/NS*100)+'%;background:var(--pri)"></i></div>'+b+'<div id="wze" class="aerr" hidden></div><div id="wzh" class="ahint" role="status" hidden></div><div class="b" style="margin-top:14px">'+(step>0?'<button id="wb" style="padding:12px 18px">Zurück</button>':'')+'<button class="pri" id="wn" style="flex:1;padding:12px">'+(step==NS-1?'Plan übernehmen':'Weiter')+'</button></div></div>';
   $('#wx').onclick=close;
   const bk=$('#wb');if(bk)bk.onclick=()=>{read();step--;draw()};
   const upd=()=>{read();const h=$('#wh2');if(h)h.innerHTML=hint2();const rw=$('#wrw');if(rw)rw.innerHTML=raceHint(a.race)};
@@ -1940,6 +1941,8 @@ function openWizard(mode){
   wz.querySelectorAll('[data-sn]').forEach(c=>c.onclick=()=>{read();a.str=+c.dataset.sn;draw()});
   if(step==4)pv();
   $('#wn').onclick=()=>{read();const e=bad(),eb=$('#wze');if(e){eb.textContent=e;eb.hidden=false;eb.scrollIntoView({block:'nearest'});return}
+   // A long run above half the peak is allowed: the first tap explains what the plan makes of it, the second continues.
+   if(step==2){const h=longRunHint(a.peak,a.cap),hb=$('#wzh'),k=a.peak+'/'+a.cap;if(h&&hb&&hb.dataset.k!==k){eb.hidden=true;hb.textContent=h;hb.dataset.k=k;hb.hidden=false;hb.scrollIntoView({block:'nearest'});return}}
    if(step<NS-1){step++;draw();wz.scrollTop=0;return}
    const st=wzState(a);
    S.prevPlan=snapPlan();archivePlan(st.start);
