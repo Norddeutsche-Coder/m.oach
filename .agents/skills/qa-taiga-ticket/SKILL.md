@@ -56,8 +56,8 @@ Logik und Sonderfälle, Datum und Zeitzone (AGENTS.md Regel 5), XSS (`innerHTML`
 ## 5. Ergebnis in Taiga
 
 - **Befunde:** Story `In Arbeit`, pro Befund ein Task `QA: <kurz>` (Status `Neu`, fünf Angaben, gleiche Zuordnung wie die Story). Ist die Story unzugeordnet, keinen Account raten und das im Bericht nennen. Gleichnamigen offenen QA-Task ergänzen statt doppelt anlegen und seine Zuordnung an die Story angleichen.
-- **Bestanden:** Story bleibt `Im Test`. Alle Tasks in `Im Test` auf `Erledigt`. Festlegen, ob nach der Veröffentlichung eine Abnahme nötig ist (sichtbare Änderung, siehe `docs/workflow.md`).
-- **Immer:** alle Screenshots als **eine ZIP** (`python3 -m zipfile -c <tmp>/qa-tg-<nr>/screenshots-tg-<nr>-<sha>.zip <tmp>/qa-tg-<nr>/vorher <tmp>/qa-tg-<nr>/nachher`) mit Taiga-MCP `attachments` hochladen. Kommentar nach `templates/qa-kommentar.md`: bei „bestanden“ ohne „Befunde“, bei „nicht bestanden“ ohne „Abnahme“.
+- **Bestanden:** Story bleibt `Im Test`. Alle Tasks in `Im Test` auf `Erledigt`.
+- **Immer:** Kommentar nach `templates/qa-kommentar.md`, bei „bestanden“ ohne „Befunde“. Screenshots bleiben in `<tmp>/qa-tg-<nr>/`, nichts an Taiga hochladen.
 
 ## 6. Bericht
 
@@ -65,4 +65,4 @@ Inhalt wie der Kommentar, dazu 2–4 aussagekräftige Bilder und der nächste Sc
 
 ## Grenzen
 
-Nichts beheben, committen, pushen oder mergen, keinen PR. In Taiga nur QA-Tasks, Kommentare, Anhänge, Story `In Arbeit` bei Befunden, Tasks `Erledigt` bei Bestehen. Nie `Im Review`, `Abnahme` oder `Fertig`, nie abnehmen. Keine echten Zugangsdaten, keine Live-Systeme. Was nicht ausführbar ist, ist ein Befund. Weiterprüfen, was geht.
+Nichts beheben, committen, pushen oder mergen, keinen PR. In Taiga nur QA-Tasks, Kommentare, Story `In Arbeit` bei Befunden, Tasks `Erledigt` bei Bestehen. Nie `Im Review` oder `Fertig`. Keine echten Zugangsdaten, keine Live-Systeme. Was nicht ausführbar ist, ist ein Befund. Weiterprüfen, was geht.

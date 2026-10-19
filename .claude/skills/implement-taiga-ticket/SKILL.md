@@ -1,6 +1,6 @@
 ---
 name: implement-taiga-ticket
-description: Setzt eine Taiga-User-Story bis zur QA-Bereitschaft um, ohne Pull Request. Aufruf mit der Story-Nummer, z. B. `/implement-taiga-ticket 27`. Klärt zuerst offene Rückfragen im Sprint, prüft die Definition of Ready, ordnet die Story der aufrufenden Person und dem laufenden Sprint zu, plant, implementiert, macht schnelle Checks, committet und pusht nach Freigabe und setzt die Story nach grüner CI auf Im Test.
+description: Setzt eine Taiga-User-Story bis zur QA-Bereitschaft um, ohne Pull Request. Aufruf mit der Story-Nummer, z. B. `/implement-taiga-ticket 27`. Klärt zuerst offene Rückfragen im Sprint, prüft die Definition of Ready, ordnet die Story der aufrufenden Person und dem laufenden Sprint zu, plant, implementiert, macht schnelle Checks, committet und pusht ohne Freigabe und setzt die Story nach grüner CI auf Im Test.
 argument-hint: <story-nummer>
 disable-model-invocation: true
 effort: high
@@ -12,7 +12,7 @@ effort: high
 
 Argument: Nummer einer **User Story** (`27` oder `#27`). Fehlt sie, frag danach und mach nichts weiter.
 
-**Zwei Haltepunkte:** nach dem Plan (Phase 2) und nach der Umsetzung (Phase 5). Ein Go zum Plan ist kein Go zum Commit. **Kein Pull Request**, auch kein Entwurf. Nur schnelle Checks (`npm run check`, `npm run lint`, `npm test -- --reporter=dot` in `frontend/`). Build, E2E, Screenshots und der Beleg je Acceptance Criteria gehören zu `/qa-taiga-ticket`.
+**Kein Haltepunkt:** Der Skill läuft ohne Go durch. Er hält nur an bei offenen fachlichen oder Architektur-Fragen und bei Fehlern, die er nicht beheben kann. **Kein Pull Request**, auch kein Entwurf. Nur schnelle Checks (`npm run check`, `npm run lint`, `npm test -- --reporter=dot` in `frontend/`). Build, E2E, Screenshots und der Beleg je Acceptance Criteria gehören zu `/qa-taiga-ticket`.
 
 ## Phase 0: Offene Rückfragen
 
@@ -22,13 +22,12 @@ Argument: Nummer einer **User Story** (`27` oder `#27`). Fehlt sie, frag danach 
 
 1. Story, Tasks und Kommentare laden (Taiga-MCP `work` `op: get`, `type: story`; Tasks mit `op: list`; Taiga-MCP `comments`). Wiki `definition-of-ready` und `definition-of-done` lesen.
 2. `git status` (fremde uncommittete Änderungen → anhalten und fragen), `git fetch origin`, Branch `…/tg-<nr>-…` suchen.
-3. **Fortsetzen:** Story `In Arbeit` oder Branch vorhanden → dorthin wechseln, offene Tasks (`QA: …`, `Abnahme: …`, `Release: …`), Kommentare und `git diff --stat origin/main...HEAD` lesen, nur den Rest planen. Nach „Nicht abgenommen“ auf einem neuen Branch.
-4. Story `Fertig`, `Im Review`, `Abnahme` oder `Im Test` ohne offene Tasks → anhalten, Stand und nächsten Schritt melden.
+3. **Fortsetzen:** Story `In Arbeit` oder Branch vorhanden → dorthin wechseln, offene Tasks (`QA: …`, `Release: …`), Kommentare und `git diff --stat origin/main...HEAD` lesen, nur den Rest planen.
+4. Story `Fertig`, `Im Review` oder `Im Test` ohne offene Tasks → anhalten, Stand und nächsten Schritt melden.
 5. **Zuordnung:** Gehört die Story jemand anderem, nur nach ausdrücklichem Ja übernehmen.
-6. **WIP:** eine andere eigene Story `In Arbeit` (`op: list`, `status: In Arbeit`, `assignee: "me"`) → anhalten und fragen. Nicht bei `hotfix`.
-7. **Definition of Ready** (nicht bei `hotfix`): fehlende fachliche Punkte sind Fragen an `lukcy22`, eine fehlende Schätzung ergänzt du im Plan. Oberflächen-Stories brauchen einen Entwurf mit „Entwurf freigegeben“ oder „Kein Entwurf nötig“ von `lukcy22`.
+6. **Definition of Ready** (nicht bei `hotfix`): fehlende fachliche Punkte sind Fragen an `lukcy22`, eine fehlende Schätzung ergänzt du im Plan. Oberflächen-Stories brauchen einen Entwurf mit „Entwurf freigegeben“ oder „Kein Entwurf nötig“ von `lukcy22`.
 
-## Phase 2: Plan (Haltepunkt 1)
+## Phase 2: Plan
 
 Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `app.css` nie ganz). Was der Code beantwortet, fragst du nicht. Zeig:
 
@@ -44,9 +43,9 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 - **Risiken** (localStorage, Supabase, Service Worker),
 - **Branch:** `<typ>/tg-<nr>-<kurztitel>`. Der Typ ist `fix` bei `bug`/`hotfix`, `chore` bei Infrastruktur oder Doku, sonst `feat`. Der Kurztitel ist englisch, kleingeschrieben, höchstens 5 Wörter.
 
-**Halte an.** Ein Go gibt es erst, wenn alle fachlichen Fragen beantwortet sind (bzw. nach 2 Arbeitstagen „Entschieden“) und die Architektur-Fragen entschieden sind.
+Zeig den Plan und mach **ohne Warten** weiter. Angehalten wird nur, solange fachliche Fragen offen sind (bzw. bis nach 2 Arbeitstagen „Entschieden“ kommt) oder Architektur-Fragen nicht entschieden sind.
 
-## Phase 3: Vorbereiten (nach Go)
+## Phase 3: Vorbereiten
 
 1. Branch von `origin/main` anlegen bzw. den vorhandenen nehmen.
 2. Story `assignee: "me"`, `status: In Arbeit`. Liegt sie nicht im laufenden Sprint (`current-sprint`), hineinziehen und kommentieren (Text in `docs/workflow.md`). Ohne laufenden Sprint fragen. Danach `sort-sprint`.
@@ -54,9 +53,9 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 
 ## Phase 4: Umsetzen
 
-**Erst der Test, dann die Logik, jeweils von einem eigenen Subagenten.** Du selbst koordinierst nur und schreibst weder Tests noch Logik. Gilt für die Story und für jede Nachbesserung (`QA: …`, `Abnahme: …`). Ausnahme nur für reine Doku, CI oder Konfiguration ohne Verhalten, mit Begründung im Haltepunkt 2.
+**Erst der Test, dann die Logik, jeweils von einem eigenen Subagenten.** Du selbst koordinierst nur und schreibst weder Tests noch Logik. Gilt für die Story und für jede Nachbesserung (`QA: …`). Ausnahme nur für reine Doku, CI oder Konfiguration ohne Verhalten, mit Begründung im Bericht in Phase 5.
 
-1. **Test-Agent** (Claude Code: `Agent`, Typ `general-purpose`, im Vordergrund). Er bekommt Story-Nummer, Acceptance Criteria, die Punkte „Tests“ und „Schnittstellen“ aus dem freigegebenen Plan und diese Regeln, aber **keinen Code der Umsetzung**. Er schreibt nur Tests und Testdaten (`*.test.ts`, `frontend/tests/**`) und ändert nichts anderes:
+1. **Test-Agent** (Claude Code: `Agent`, Typ `general-purpose`, im Vordergrund). Er bekommt Story-Nummer, Acceptance Criteria, die Punkte „Tests“ und „Schnittstellen“ aus dem Plan und diese Regeln, aber **keinen Code der Umsetzung**. Er schreibt nur Tests und Testdaten (`*.test.ts`, `frontend/tests/**`) und ändert nichts anderes:
    - Logik: Unit-Tests neben dem Code für Normalfall, Grenzwerte und Sonderfälle. Mit Datum immer mit festem Datum (`vi.setSystemTime`) und zeitzonenunabhängig (AGENTS.md Regel 5).
    - Sichtbares Verhalten: E2E-Tests in `frontend/tests/`, mit Testdaten wie in `frontend/tests/fixtures/`.
    - Behobener Fehler: ein Test, der den Fehler zeigt.
@@ -69,15 +68,15 @@ Lies den betroffenen Code gezielt (`grep -n`, dann Ausschnitte; `app.js` und `ap
 
 **Ohne Subagenten** (z. B. Codex): dieselbe Reihenfolge selbst einhalten. Zuerst nur Tests schreiben und rot belegen, Stand festhalten, danach die Logik, ohne die Tests zu ändern.
 
-## Phase 5: Checks und Freigabe (Haltepunkt 2)
+## Phase 5: Checks
 
-Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben (Logik über den Logik-Agenten, Tests über den Test-Agenten), höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, **neue und geänderte Tests** mit Datei und Testname, Beleg „erst rot, dann grün“ und Bestätigung, dass der Logik-Agent keine Test-Datei geändert hat (oder die begründete Ausnahme), `git diff --stat`, Commit-Nachricht. Fehlen Tests für neue Logik oder neues Verhalten, ist das kein Stand für ein Go. **Ohne Go kein Commit und kein Push.**
+Schnelle Checks mit kompakter Ausgabe. Bei Fehlern Ursache beheben (Logik über den Logik-Agenten, Tests über den Test-Agenten), höchstens 3 Runden, Tests nie abschwächen (`.skip`, `.fixme`, angepasste Erwartungen). Danach zeigen: eine Zeile je Check, jede Acceptance Criteria ✅/❌, **neue und geänderte Tests** mit Datei und Testname, Beleg „erst rot, dann grün“ und Bestätigung, dass der Logik-Agent keine Test-Datei geändert hat (oder die begründete Ausnahme), `git diff --stat`, Commit-Nachricht. Danach ohne Warten weiter. Fehlen Tests für neue Logik oder neues Verhalten, oder ist ein Check rot, **kein Commit und kein Push**: Tests über den Test-Agenten ergänzen, sonst anhalten.
 
-## Phase 6: Commit und Push (nach Go)
+## Phase 6: Commit und Push
 
 1. Commit `<typ>: <beschreibung> TG-<nr>`, ohne `#status` und ohne `Co-Authored-By:` für KI-Agenten.
 2. `git push -u origin <branch>`. Nie auf `main`, nie force-pushen, **kein PR**.
-3. Behobene `QA: …`/`Abnahme: …`-Tasks auf `Im Test`.
+3. Behobene `QA: …`-Tasks auf `Im Test`.
 4. CI für den Head-Commit abwarten (`gh run list --commit <sha>`, höchstens 15 Minuten). Rot → Job und Ursache zeigen, anhalten, Story bleibt `In Arbeit`.
 5. Grün → Story `Im Test`, Kommentar nach `templates/umgesetzt.md`. Nächster Schritt: `/qa-taiga-ticket <nr>` in einer frischen Sitzung.
 
@@ -87,7 +86,7 @@ Kurz gesagt, Branch mit Head-Commit und CI-Link, Status in Taiga (Story, Tasks, 
 
 ## Grenzen
 
-- Kein PR, kein Merge, nie `Im Review`, `Abnahme` oder `Fertig` setzen.
+- Kein PR, kein Merge, nie `Im Review` oder `Fertig` setzen.
 - Fachliche Fragen nie selbst entscheiden (→ `lukcy22`), Architektur-Fragen nie selbst entscheiden (→ `fynndow`), übrige technische Fragen selbst entscheiden und dokumentieren.
 - Keine Änderungen an GitHub-, Taiga- oder Supabase-Einstellungen, keine Migrationen gegen das Live-Projekt, keine Secrets.
-- Weicht etwas vom freigegebenen Plan ab, anhalten und fragen.
+- Weicht die Umsetzung vom Plan ab, die Abweichung mit Begründung im Kommentar „Umgesetzt“ festhalten. Anhalten nur, wenn dadurch eine fachliche oder Architektur-Frage entsteht.

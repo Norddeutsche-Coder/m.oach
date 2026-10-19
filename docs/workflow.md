@@ -21,7 +21,8 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 
 ## 3. Rollen und Fragen
 
-- **Kein Product Owner, der entscheidet.** Freigaben (Go) gibt die Person, die den Skill aufruft. Sie ist auch das Taiga-Konto der Sitzung (`scripts/moach_taiga.py me`).
+- **Kein Product Owner, der entscheidet.** Die Skills laufen ohne Freigaben (Go) durch. Sie halten nur an bei offenen fachlichen oder Architektur-Fragen, bei Fehlern, vor PR und Merge einer **riskanten Story** und vor einem Revert. Diese beiden Freigaben gibt die Person, die den Skill aufruft. Sie ist auch das Taiga-Konto der Sitzung (`scripts/moach_taiga.py me`).
+- **Riskant** ist eine Story mit einem der Tags `sicherheit`, `rls`, `datenverlust` oder `hotfix`, oder wenn der Diff (`git diff --name-only origin/main...origin/<branch>`) Dateien unter `backend/`, `frontend/src/sw/`, `.github/` oder `scripts/build-service-worker.mjs` ändert.
 - **Fachliche Fragen** (Verhalten für Läufer, Texte, Umfang, Entwurf) beantwortet `lukcy22`. Stell sie als Kommentar an die Story bzw. das Issue:
   ```
   ## Fachliche Fragen an @lukcy22
@@ -35,37 +36,38 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 
 ## 4. Status
 
-- **Story:** Neu → Bereit → In Arbeit → Im Test → Im Review → Abnahme → Fertig (oder Archiviert).
+- **Story:** Neu → Bereit → In Arbeit → Im Test → Im Review → Fertig (oder Archiviert).
   - **Bereit:** Definition of Ready (Wiki `definition-of-ready`) erfüllt. Die Skills setzen den Status **automatisch** mit Kommentar `Definition of Ready erfüllt, auf Bereit gesetzt.`. Fehlt ein Punkt, bleibt die Story `Neu`, der fehlende Punkt steht als Kommentar an der Story.
   - **Im Test:** umgesetzt, gepusht, CI grün, wartet auf QA.
   - **Im Review:** QA bestanden, PR offen.
-  - **Abnahme:** live, nur bei sichtbaren Änderungen.
+  - **Abnahme:** wird nicht mehr vergeben. Stories, die noch darauf stehen, setzt `/finish-taiga-ticket` direkt auf `Fertig`.
 - **Task:** Neu → In Arbeit → Im Test (erledigt, wartet auf QA) → Erledigt (nach bestandener QA), oder Blockiert.
 
 ## 5. Ablauf einer Story
 
 1. `/implement-taiga-ticket <nr>`: Plan, Umsetzung, schnelle Checks, Commit, Push, CI grün → **Im Test**. **Kein PR.** Umgesetzt wird testgetrieben: Ein Subagent schreibt zuerst die Tests und belegt, dass sie fehlschlagen, ein zweiter schreibt danach die Logik, ohne die Tests zu ändern.
 2. `/qa-taiga-ticket <nr>`: prüft den gepushten Branch. Befunde → `In Arbeit` mit Tasks `QA: …`. Bestanden → Tasks `Erledigt`, Story bleibt `Im Test`.
-3. `/finish-taiga-ticket <nr>`: prüft die Bedingungen, erstellt nach Go den PR (**Im Review**), merged, prüft live, Neuigkeit im Wiki, dann **Abnahme** oder **Fertig**.
-4. **Abnahme nach der Veröffentlichung:** nur bei Änderungen, die Läufer bemerken (Oberfläche, Texte, Verhalten). Abnehmen darf jedes Projektmitglied **außer der zugeordneten Person**. Angesprochen wird `@lukcy22`, wenn `fynndow` zugeordnet ist, sonst `@fynndow`. Antwort „Abgenommen“ oder „Nicht abgenommen: …“. Ein erneuter Aufruf von `/finish-taiga-ticket` setzt dann `Fertig` bzw. legt Tasks `Abnahme: …` an und setzt `In Arbeit`. Reine Technik braucht keine Abnahme, bei `hotfix` ist sie optional.
+3. `/finish-taiga-ticket <nr>`: prüft die Bedingungen, erstellt den PR (**Im Review**), merged, prüft live, Neuigkeit im Wiki, dann **Fertig**. Nur bei riskanten Stories erst nach Go.
 
-**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Bei Änderungen an der Oberfläche öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser, damit die Person den Unterschied vorher sieht. PR und Squash-Merge macht er ohne weiteres Go, sobald die QA bestanden ist und alle Pipelines grün sind.
+Eine Abnahme durch eine andere Person gibt es nicht mehr. Die QA und die Live-Prüfung nach dem Merge ersetzen sie.
 
-## 6. Sprint, Zuordnung und WIP
+**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Er läuft ohne Go durch, auch PR und Squash-Merge, sobald die QA bestanden ist und alle Pipelines grün sind. Nur bei riskanten Stories hält er vor PR und Merge an. Auf Wunsch (`mit Vorschau` im Aufruf) öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser.
+
+## 6. Sprint, Zuordnung und parallele Arbeit
 
 - **Zuordnung:** `/implement-taiga-ticket` ordnet Story und Tasks der aufrufenden Person zu. Eine Story, die jemand anderem gehört, nur nach Rückfrage übernehmen.
-- **WIP-Limit:** höchstens eine eigene Story `In Arbeit` (außer `hotfix`).
+- **Kein WIP-Limit:** Beliebig viele Stories dürfen gleichzeitig `In Arbeit` sein, auch in parallelen Sitzungen. Jede Story hat ihren eigenen Branch. Stories, die dieselben großen Dateien ändern (`src/legacy/app.js`, `src/app.css`), laufen besser nacheinander, sonst drohen Merge-Konflikte.
 - **Laufender Sprint:** der offene Sprint, dessen Zeitraum heute enthält (`current-sprint`). Eine bearbeitete Story außerhalb davon wird hineingezogen, mit Kommentar `In Sprint <Name> aufgenommen (vorher: <alt> | Backlog), <Punkte> Punkte zusätzlich zur Planung.`
 - **Sortierung:** nach jedem Statuswechsel `sort-sprint`. In Bearbeitung oben, offen darunter, fertig unten.
 - **Offene Rückfragen zuerst:** `/implement-taiga-ticket` beginnt mit `pending-questions` für den laufenden Sprint.
 
 ## 7. Hotfix
 
-Tag `hotfix` für dringende Fehler in der Live-App (Datenverlust, Sicherheit, App unbenutzbar, schädlicher Rat). Kriterien und Ablauf im Wiki `hotfix`. Es entfallen Definition of Ready, WIP-Limit, Entwurf und die volle Screenshot-Matrix. Nie entfallen: Tests, QA, PR, grüne CI, Live-Prüfung.
+Tag `hotfix` für dringende Fehler in der Live-App (Datenverlust, Sicherheit, App unbenutzbar, schädlicher Rat). Kriterien und Ablauf im Wiki `hotfix`. Es entfallen Definition of Ready, Entwurf und die volle Screenshot-Matrix. Nie entfallen: Tests, QA, PR, grüne CI, Live-Prüfung.
 
 ## 8. Texte für Menschen
 
-Kommentare in Taiga, PR-Beschreibungen und Berichte beginnen mit **„Kurz gesagt“**: 2–3 Sätze ohne Fachbegriffe. Screenshots kommen als **eine ZIP-Datei** an die Story, nie als einzelne PNG-Dateien.
+Kommentare in Taiga, PR-Beschreibungen und Berichte beginnen mit **„Kurz gesagt“**: 2–3 Sätze ohne Fachbegriffe. Screenshots bleiben im lokalen `<tmp>` und werden **nicht** an Taiga hochgeladen, weder einzeln noch als ZIP. Kommentare beschreiben, was auf ihnen zu sehen ist.
 
 ## 9. Skills pflegen
 
@@ -85,7 +87,7 @@ Skills nur unter `.agents/skills/` ändern, danach `node scripts/sync-skills.mjs
 | `finish-taiga-ticket`    | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
 | `lukas-plant-setzt-um-testet-und-laedt-hoch` | Sitzungsmodell, `effort: high`, QA als Subagent, Abschluss als Subagent mit `sonnet` | `moach-deep`: `gpt-6-astra`, `high`      |
 
-- **Claude Code:** `model` und `effort` gelten für den Zug, in dem der Skill aufgerufen wird. Nach der nächsten Eingabe, etwa dem Go an einem Haltepunkt, gilt wieder das Sitzungsmodell.
+- **Claude Code:** `model` und `effort` gelten für den Zug, in dem der Skill aufgerufen wird. Nach der nächsten Eingabe, etwa der Antwort auf eine Rückfrage, gilt wieder das Sitzungsmodell.
 - **Codex:** Skills können kein Modell und keinen Reasoning-Aufwand festlegen. Weder `SKILL.md` noch `agents/openai.yaml` haben dafür ein Feld. Deshalb liegen die persönlichen Profile `moach-deep.config.toml`, `moach-routine.config.toml` und `moach-quick.config.toml` unter `~/.codex/` (Windows: `%USERPROFILE%\.codex\`). Sie enthalten jeweils nur `model` und `model_reasoning_effort`. `moach-quick` nutzt `gpt-6-luna` mit `low` für kurze Fragen ohne Skill. Profile gehören nicht ins Repository; die Projektdatei `.codex/config.toml` ignoriert `profile`/`profiles` und liefert weiterhin die MCP-Konfiguration.
 
   Skills immer über das Startskript in einer frischen Sitzung aufrufen:

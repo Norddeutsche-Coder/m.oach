@@ -8,7 +8,7 @@
 - ✅/❌ <AC im Wortlaut> – <Beleg bzw. Grund>
 
 **Definition of Done:** <erfüllt / Abweichungen>
-**Screenshots:** <Szenarien in Kurzform>, <n> Bilder (<m> geändert) in `screenshots-tg-<nr>-<sha>.zip` | keine nötig, weil <Grund>
+**Screenshots:** <Szenarien in Kurzform>, <n> Bilder (<m> geändert), lokal geprüft: <was zu sehen ist, in einem Satz> | keine nötig, weil <Grund>
 **Code-Review:** <geprüfte Bereiche in einem Satz>
 
 ### Befunde (→ QA-Tasks #…)
@@ -21,7 +21,3 @@
 
 ### Hinweise
 - … | keine
-
-### Abnahme nach der Veröffentlichung (nur bei bestanden)
-**Nötig:** ja, sichtbare Änderung | nein, reine Technik
-**Was ausprobiert werden soll:** <1–3 Schritte in Alltagssprache> (nur wenn nötig)

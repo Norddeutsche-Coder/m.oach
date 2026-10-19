@@ -104,7 +104,7 @@ Der Workflow `.github/workflows/secret-scan.yml` prüft jeden PR mit gitleaks un
 
 Projekt `fynndow-moach` auf tree.taiga.io, Scrum mit Sprints à 2 Wochen, 1 Story Point = 1 Arbeitstag, geschätzt pro Rolle (UX, Design, Front, Back). Jede Story hat **Acceptance Criteria** als Checkliste, sie werden wörtlich geprüft. Epics und Wiki: Seite `home`. Fehler tragen den Tag `bug`.
 
-**Den kompletten Ablauf beschreibt [docs/workflow.md](docs/workflow.md):** Rollen und Fragen (fachlich `lukcy22`, Architektur `fynndow`, kein entscheidender Product Owner), Status, Abnahme nach der Veröffentlichung, Sprint-Regeln, Hotfix, Helfer-Skript `scripts/moach_taiga.py`. Die wichtigsten Regeln:
+**Den kompletten Ablauf beschreibt [docs/workflow.md](docs/workflow.md):** Rollen und Fragen (fachlich `lukcy22`, Architektur `fynndow`, kein entscheidender Product Owner), Status, Go nur bei riskanten Stories und Reverts, Sprint-Regeln, Hotfix, Helfer-Skript `scripts/moach_taiga.py`. Die wichtigsten Regeln:
 
 - **Kein Pull Request vor bestandener QA.** `/implement-taiga-ticket` pusht nur, `/qa-taiga-ticket` prüft, `/finish-taiga-ticket` erstellt den PR und merged.
 - Agenten entscheiden fachliche und Architektur-Fragen nie selbst. Übrige technische Entscheidungen treffen sie selbst und dokumentieren sie.

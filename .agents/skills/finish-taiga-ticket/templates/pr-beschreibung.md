@@ -10,9 +10,8 @@
 ## Acceptance Criteria
 - [x] …
 
-## QA und Abnahme
+## QA
 - QA bestanden für `<head-kurz-sha>` (<Link zum QA-Kommentar>)
-- Abnahme: nach der Veröffentlichung durch @<andere Person> | nicht nötig, reine Technik
 
 ## Risiken
 - …
