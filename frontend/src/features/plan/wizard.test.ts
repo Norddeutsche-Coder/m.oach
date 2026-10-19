@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { longRunHint, longRunLimit, plannedLongRun } from './wizard'
+import { longRunHint, longRunLimit, plannedLongRun, taperLongRunLimit } from './wizard'
 
 describe('planned long run', () => {
   it.each([
@@ -62,8 +62,22 @@ describe('long run rules by plan type', () => {
       for (let cap = 8; cap <= Math.min(45, peak * 0.5); cap++)
         for (const f of taperShares) {
           const taper = Math.round(cap * f)
-          expect(Math.min(taper, longRunLimit(peak, cap))).toBe(taper)
+          expect(Math.min(taper, taperLongRunLimit(peak, cap))).toBe(taper)
         }
+  })
+
+  it('keeps taper long runs at the hinted length above half the peak volume', () => {
+    expect(taperLongRunLimit(25, 16)).toBe(6)
+    expect(taperLongRunLimit(20, 12)).toBe(5)
+    expect(taperLongRunLimit(45, 45)).toBe(18)
+    for (let peak = 10; peak <= 220; peak++)
+      for (let cap = 8; cap <= 45; cap++)
+        if (cap > peak * 0.5) expect(taperLongRunLimit(peak, cap)).toBe(plannedLongRun(peak, cap))
+  })
+
+  it('uses the 25–40 % rule for taper long runs up to half the peak volume', () => {
+    expect(taperLongRunLimit(25, 12)).toBe(longRunLimit(25, 12))
+    expect(taperLongRunLimit(55, 27)).toBe(22)
   })
 })
 

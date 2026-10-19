@@ -5,7 +5,7 @@ import { createLifecycle } from '../lib/lifecycle'
 import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
-import { longRunHint, longRunLimit } from '../features/plan/wizard'
+import { longRunHint, taperLongRunLimit } from '../features/plan/wizard'
 import { supabaseConfig } from '../config/supabase'
 
 export function initializeLegacyApp({ onTabChange, onCoachChange, onTodayChange }) {
@@ -1819,7 +1819,7 @@ function buildCfg(a){
  if(mt){const i2=roles.indexOf('q2');if(a.q<2&&i2>=0)roles[i2]='easy';const i1=roles.indexOf('q1');if(a.q<1&&i1>=0)roles[i1]='easy'}
  const raw={easy:.19,str:.16,q1:.22,q2:.22},W=roles.map(r=>raw[r]||0),sm=W.reduce((x,y)=>x+y,0)||1;
  const strD=seq.filter(x=>x.k!=1&&(roles[x.d]=='easy'||roles[x.d]=='str')).slice(0,a.str).map(x=>x.d);
- const cap=a.cap,tl=TP[N-1].tl.map(f=>Math.min(Math.round(cap*f),longRunLimit(a.peak,cap))),Wn=W.map(x=>x/sm);
+ const cap=a.cap,tl=TP[N-1].tl.map(f=>Math.min(Math.round(cap*f),taperLongRunLimit(a.peak,cap))),Wn=W.map(x=>x/sm);
  if(mt)return{tw,T:[tw+1,0,0,0,0],S:0,A:[[tw,a.cur]],cap,ls:clampN(cap/a.cur,.25,.4),tl,roles,W:Wn,strD,test:-1,recov:-1,first:999,fw:[],mul:false,mode:'maintain'};
  let S0=clampN(Math.round(tw*.265),6,13),T4=N+S0,T3=T4+4,n=tw-T3+1;
  const test=tw>=24&&n>=8;let T,Sx;

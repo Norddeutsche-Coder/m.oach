@@ -17,6 +17,14 @@ export function plannedLongRun(peak: number, cap: number, options: LongRunOption
   return longRunLimit(peak, cap)
 }
 
+/**
+ * Upper limit of the taper long runs. Above half the peak the plan keeps the length named in the hint,
+ * otherwise the 25–40 % rule applies so that previously allowed plans stay unchanged.
+ */
+export function taperLongRunLimit(peak: number, cap: number): number {
+  return cap > peak * 0.5 ? plannedLongRun(peak, cap) : longRunLimit(peak, cap)
+}
+
 /** Non-blocking hint when the longest run is more than half of the peak volume, otherwise null. */
 export function longRunHint(
   peak: number,

@@ -205,6 +205,25 @@ test('taper long runs stay within the peak week limit', async ({ page }) => {
   expect(await longestRun(wizard)).toBeLessThanOrEqual(18)
 })
 
+for (const taper of ['2', '4'])
+  test(`half marathon below 30 km/week with taper ${taper} keeps the hinted long run`, async ({
+    page,
+  }) => {
+    const wizard = await openWizard(page)
+    await wizard.locator('[data-ty="21.0975"]').click()
+    await wizard.locator(`[data-tp="${taper}"]`).click()
+    await toVolumeStep(wizard)
+    await wizard.locator('#wc').fill('20')
+    await wizard.locator('#wp').fill('25')
+    await wizard.locator('#wl').fill('16')
+    await wizard.locator('#wn').click()
+    await expect(wizard.locator('#wzh')).toContainText('etwa 6 km lang')
+    await wizard.locator('#wn').click()
+    await wizard.locator('#wn').click()
+    await expect(wizard).toContainText('Schritt 5 von 5')
+    expect(await longestRun(wizard)).toBeLessThanOrEqual(6)
+  })
+
 test('"Ausdauer erhalten" talks about the weekly volume', async ({ page }) => {
   const wizard = await openWizard(page)
   await wizard.locator('[data-ty="m"]').click()
