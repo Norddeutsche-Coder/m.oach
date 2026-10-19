@@ -6,6 +6,7 @@ import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
 import { longRunHint, taperLongRunLimit } from '../features/plan/wizard'
+import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
 
 export function initializeLegacyApp({ onTabChange, onCoachChange, onTodayChange }) {
@@ -2454,18 +2455,22 @@ const stSig=st=>JSON.stringify(st,(k,v)=>k==='_m'?undefined:v);
 function cloudAdopt(st,m){const keep=S.coach;S=Object.assign(DEF(),st);if(keep)S.coach=keep;S._m=m;START=parse(S.start||'2026-10-12');
  const u=USERS.find(x=>x.id===UID);if(u&&S.prof&&S.prof.name&&u.name!==S.prof.name){u.name=S.prof.name;LS.set('moach_users',JSON.stringify(USERS))}
  store(true);CL.sig=stSig(cloudState());icuSyncState(true).catch(()=>{})}
-async function cloudCatchUp(){const row=await cloudRow();if(row&&+row.modified>(+S._m||0)){cloudAdopt(row.state,+row.modified);CL.bak=+row.modified;CL.bakAt=Date.parse(row.updated_at)||Date.now();render()}}
+function cloudObserve(row){
+ const m=+row.modified||0;
+ if(!cloudStatesMatch(cloudState(),Object.assign(DEF(),row.state||{}))){CL.choice={row};CL.pulled=false;return false}
+ S._m=m;store(true);CL.sig=stSig(cloudState());CL.bak=m;CL.bakAt=Date.parse(row.updated_at)||Date.now();CL.choice=null;CL.pulled=true;return true}
+async function cloudCatchUp(){const row=await cloudRow();if(!row){CL.err='Der aktuelle Cloud-Stand konnte nicht geladen werden.';render();return}cloudObserve(row);render()}
 async function cloudPush(force){
  if(!sbOn()||!CL.ses||!CL.pulled||CL.pushing)return;
- const st=cloudState(),sig=stSig(st);
+ const sig=stSig(cloudState());
  if(force||sig!==CL.sig){
   CL.pushing=1;
-  try{const m=S._m||(S._m=Date.now()),u=CL.ses.uid;
-   /* nur überschreiben, wenn die Cloud nicht neuer ist */
-   const up=await sbRest('user_data?user_id=eq.'+u+'&modified=lte.'+m+'&select=modified',{m:'PATCH',h:PREF('return=representation'),b:{state:st,modified:m}});
-   if(!(up&&up.length)){
-    try{await sbRest('user_data',{m:'POST',h:PREF('return=minimal'),b:{user_id:u,state:st,modified:m}})}
-    catch(e){if(e.status==409){CL.pushing=0;await cloudCatchUp();return}throw e}}
+  try{const baseline=+CL.bak||0,m=nextCloudRevision(+S._m||0,baseline,Date.now()),u=CL.ses.uid;S._m=m;store(true);const st=cloudState();
+   if(baseline){
+    const up=await sbRest('user_data?user_id=eq.'+u+'&modified=eq.'+baseline+'&select=modified',{m:'PATCH',h:PREF('return=representation'),b:{state:st,modified:m}});
+    if(!(up&&up.length)){CL.pushing=0;await cloudCatchUp();return}}
+   else try{await sbRest('user_data',{m:'POST',h:PREF('return=minimal'),b:{user_id:u,state:st,modified:m}})}
+   catch(e){if(e.status==409){CL.pushing=0;await cloudCatchUp();return}throw e}
    CL.sig=sig;CL.bak=m;CL.bakAt=Date.now();CL.err=''}
   catch(e){CL.err=e.message;CL.pushing=0;return}
   CL.pushing=0}
@@ -2527,8 +2532,8 @@ async function cloudInit(){
   await cloudProfile();
   const row=await cloudRow();
   if(!row){CL.pulled=true;await icuSyncState(false).catch(()=>{});await cloudPush(true)}
-  else{const cm=+row.modified||0,lm=+S._m||0;CL.bak=cm;CL.bakAt=Date.parse(row.updated_at)||0;if(cm>lm)cloudAdopt(row.state,cm);CL.pulled=true;if(cm<=lm)await icuSyncState(false).catch(()=>{});if(cm<lm)await cloudPush(true)}
-  await cloudReqs();await cloudShare(false);CL.err=''}
+  else if(cloudObserve(row))await icuSyncState(false).catch(()=>{});
+  await cloudReqs();if(CL.pulled)await cloudShare(false);CL.err=''}
  catch(e){CL.err=e.message}
  navCoach();render()}
 async function cloudAfterLogin(pw){
@@ -2537,8 +2542,7 @@ async function cloudAfterLogin(pw){
  const row=await cloudRow();
  if(pw)await icuLogin(pw,row&&row.state&&row.state.icuc).catch(()=>{});
  if(!row){CL.pulled=true;if(!S._m)S._m=Date.now();store(true);await icuSyncState(false).catch(()=>{});await cloudPush(true)}
- else if(+row.modified===+S._m){CL.pulled=true;CL.bak=+row.modified}
- else CL.choice={row};
+ else cloudObserve(row);
  if(CL.pulled){await icuSyncState(false).catch(()=>{});await cloudReqs().catch(()=>{});await cloudShare(false).catch(()=>{})}
  navCoach();render()}
 function cloudReset(){clearTimeout(CL.t);CL.adm=null;CL.reqs=null;CL.names={};CL.shared={};CL.pulled=false;CL.choice=null;CL.sig='';CL.shSig='';CL.rsig='';CL.err='';CSEL={t:'',id:'',i:0}}
@@ -2550,7 +2554,7 @@ async function cloudTick(){
  try{
   if(!PUSH.rs){PUSH.rs=1;pushResync().catch(()=>{})}
   const rows=await sbRest('user_data?select=modified&user_id=eq.'+CL.ses.uid),cm=rows&&rows[0]?+rows[0].modified:0;
-  if(cm>(+S._m||0)){const row=await cloudRow();if(row){cloudAdopt(row.state,+row.modified);render()}}
+  if(cm!==+CL.bak){const row=await cloudRow();if(row&&!cloudObserve(row)){render();return}}
   const ch=await cloudReqs();let sh=false;
   if(CSEL.t=='c'){const o=CL.shared[CSEL.id],n=await cloudFetchShared(CSEL.id);sh=!o||o.at!==n.at}
   if(ch||sh){badges();publishToday();const as=document.activeElement;if(!(as&&$('#set').contains(as)))rSet();rCoach()}
@@ -2704,7 +2708,7 @@ function cloudCard(){
   +'<label class="ck"><input type="checkbox" id="cla"><span>Ich stimme zu, dass M.oach meinen Namen, meine E-Mail-Adresse und mein Backup (Plan, Läufe, Wellness-Daten) auf dem Supabase-Server des Betreibers speichert. Ein Coach sieht nur etwas, wenn ich es ausdrücklich bestätige. Mein Intervals.icu-Zugang wird nur verschlüsselt gespeichert; der Schlüssel dafür entsteht aus meinem Passwort, der Betreiber kann ihn nicht lesen.</span></label>'
   +'<div id="clr" class="aerr" hidden></div><div class="b"><button class="pri" id="cli">Anmelden</button><button id="clu">Konto erstellen</button><button id="clf">Passwort vergessen?</button></div></div>';
  if(CL.choice){const r=CL.choice.row,n=(r.state&&r.state.runs||[]).length;
-  return'<div class="card">'+h3+'<div class="sub">Verbunden als <b>'+esc(s.email||'')+'</b></div><div class="an a-y">In der Cloud liegt ein Stand vom '+new Date(r.updated_at||Date.now()).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+' ('+n+' Läufe). Welchen möchtest du behalten?</div><div id="clr" class="aerr" hidden></div><div class="b"><button class="pri" id="clld">Cloud-Stand laden</button><button id="clup">Diesen Stand hochladen</button></div></div>'}
+  return'<div class="card">'+h3+'<div class="sub">Verbunden als <b>'+esc(s.email||'')+'</b></div><div class="an a-y">In der Cloud liegt ein Stand vom '+new Date(r.updated_at||Date.now()).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+' ('+n+' Läufe). Auf beiden Geräten können Änderungen vorliegen. Welchen Stand möchtest du behalten? Die nicht gewählte Fassung wird verworfen.</div><div id="clr" class="aerr" hidden></div><div class="b"><button class="pri" id="clld">Cloud-Stand laden</button><button id="clup">Diesen Stand hochladen</button></div></div>'}
  const bk=CL.bakAt?'zuletzt '+new Date(CL.bakAt).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'noch nicht';
  return'<div class="card">'+h3+'<div class="sub">Verbunden als <b>'+esc(s.email||'')+'</b>'+(CL.adm?' <span class="tag">Coach</span>':'')+'</div>'
   +'<div class="ln">Backup: '+bk+'</div>'+(CL.err?'<div class="aerr" style="margin-top:6px">'+esc(CL.err)+'</div>':'')+'<div id="clr" class="aerr" hidden></div>'
@@ -2726,7 +2730,7 @@ function wireCloud(){
  const fg=$('#clf');if(fg)fg.onclick=async()=>{const e=er();const ok=await cloudRun(fg,()=>cloudRecover($('#cle').value),e);if(ok){e.textContent='Wenn die Adresse registriert ist, haben wir dir einen Link zum Zurücksetzen geschickt.';e.hidden=false}};
  const li=$('#cli');if(li)li.onclick=go('in');const lu=$('#clu');if(lu)lu.onclick=go('up');
  const ld=$('#clld');if(ld)ld.onclick=async()=>{const e=er();await cloudRun(ld,async()=>{const r=CL.choice.row;cloudAdopt(r.state,+r.modified);CL.pulled=true;CL.choice=null;CL.bak=+r.modified;CL.bakAt=Date.parse(r.updated_at)||Date.now();await cloudReqs().catch(()=>{});navCoach();render();showTab('set')},e)};
- const lp=$('#clup');if(lp)lp.onclick=async()=>{const e=er();await cloudRun(lp,async()=>{CL.pulled=true;CL.choice=null;await icuSyncState(false).catch(()=>{});S._m=Date.now();store(true);await cloudPush(true);await cloudReqs().catch(()=>{});render();showTab('set')},e)};
+ const lp=$('#clup');if(lp)lp.onclick=async()=>{const e=er();await cloudRun(lp,async()=>{const r=CL.choice.row;CL.bak=+r.modified||0;CL.bakAt=Date.parse(r.updated_at)||Date.now();CL.pulled=true;CL.choice=null;await icuSyncState(false).catch(()=>{});await cloudPush(true);await cloudReqs().catch(()=>{});render();showTab('set')},e)};
  const nw=$('#clnow');if(nw)nw.onclick=async()=>{const e=er();await cloudRun(nw,async()=>{if(!CL.pulled)throw new Error('Cloud-Abgleich läuft noch. Bitte gleich nochmal versuchen.');await cloudPush(true);if(CL.err)throw new Error(CL.err);render();showTab('set')},e)};
  const lo=$('#clout');if(lo)lo.onclick=()=>cloudOut();
  const dl=$('#cldel');if(dl){let c=0;dl.onclick=async()=>{if(!c){c=1;dl.textContent='Wirklich löschen? Nochmal tippen';return}await cloudRun(dl,()=>cloudDelete(),er())}}}
