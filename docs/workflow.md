@@ -57,6 +57,7 @@ Eine Abnahme durch eine andere Person gibt es nicht mehr. Die QA und die Live-Pr
 
 - **Zuordnung:** `/implement-taiga-ticket` ordnet Story und Tasks der aufrufenden Person zu. Eine Story, die jemand anderem gehört, nur nach Rückfrage übernehmen.
 - **Kein WIP-Limit:** Beliebig viele Stories dürfen gleichzeitig `In Arbeit` sein, auch in parallelen Sitzungen. Jede Story hat ihren eigenen Branch. Stories, die dieselben großen Dateien ändern (`src/legacy/app.js`, `src/app.css`), laufen besser nacheinander, sonst drohen Merge-Konflikte.
+- **Mehrere Sitzungen auf einem Rechner:** In jeder Sitzung `/parallel-taiga-session alle` (beliebig viele). Jede Sitzung bekommt einen eigenen Platz mit eigenem Worktree unter `.claude/worktrees/` und eigenen Ports, sperrt ihre Story, weicht Stories aus, die Dateien eines anderen Platzes ändern, und merged über eine gemeinsame Merge-Sperre nacheinander. Übersicht: `node .agents/skills/parallel-taiga-session/scripts/session.mjs status`. Epics plant immer nur eine Sitzung.
 - **Laufender Sprint:** der offene Sprint, dessen Zeitraum heute enthält (`current-sprint`). Eine bearbeitete Story außerhalb davon wird hineingezogen, mit Kommentar `In Sprint <Name> aufgenommen (vorher: <alt> | Backlog), <Punkte> Punkte zusätzlich zur Planung.`
 - **Sortierung:** nach jedem Statuswechsel `sort-sprint`. In Bearbeitung oben, offen darunter, fertig unten.
 - **Offene Rückfragen zuerst:** `/implement-taiga-ticket` beginnt mit `pending-questions` für den laufenden Sprint.
@@ -86,6 +87,7 @@ Skills nur unter `.agents/skills/` ändern, danach `node scripts/sync-skills.mjs
 | `qa-taiga-ticket`        | Subagent (`context: fork`), Sitzungsmodell, `effort: high` | `moach-deep`: `gpt-6-astra`, `high`      |
 | `finish-taiga-ticket`    | `model: sonnet`, `effort: medium`                          | `moach-routine`: `gpt-6.1-sol`, `medium` |
 | `lukas-plant-setzt-um-testet-und-laedt-hoch` | Sitzungsmodell, `effort: high`, QA als Subagent, Abschluss als Subagent mit `sonnet` | `moach-deep`: `gpt-6-astra`, `high`      |
+| `parallel-taiga-session` | wie `lukas-plant-setzt-um-testet-und-laedt-hoch` | `moach-deep`: `gpt-6-astra`, `high`      |
 
 - **Claude Code:** `model` und `effort` gelten für den Zug, in dem der Skill aufgerufen wird. Nach der nächsten Eingabe, etwa der Antwort auf eine Rückfrage, gilt wieder das Sitzungsmodell.
 - **Codex:** Skills können kein Modell und keinen Reasoning-Aufwand festlegen. Weder `SKILL.md` noch `agents/openai.yaml` haben dafür ein Feld. Deshalb liegen die persönlichen Profile `moach-deep.config.toml`, `moach-routine.config.toml` und `moach-quick.config.toml` unter `~/.codex/` (Windows: `%USERPROFILE%\.codex\`). Sie enthalten jeweils nur `model` und `model_reasoning_effort`. `moach-quick` nutzt `gpt-6-luna` mit `low` für kurze Fragen ohne Skill. Profile gehören nicht ins Repository; die Projektdatei `.codex/config.toml` ignoriert `profile`/`profiles` und liefert weiterhin die MCP-Konfiguration.

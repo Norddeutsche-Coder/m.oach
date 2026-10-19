@@ -40,7 +40,7 @@ Jede Acceptance Criteria einzeln, unabhängig vom Haken in Taiga: **erfüllt** m
 
 **Vorgehen:**
 
-1. Unter `<tmp>/qa-tg-<nr>/` die Worktrees `branch-src` (von `origin/<branch>`) und `basis-src` (von `origin/main`) anlegen. In `frontend/` jeweils `npm ci --silent` (oder `node_modules` verlinken, wenn `package-lock.json` gleich ist), mit den Testwerten aus AGENTS.md bauen und mit `npx vite preview --host 127.0.0.1 --strictPort` auf Port 4181 (nachher) bzw. 4182 (vorher) starten.
+1. Unter `<tmp>/qa-tg-<nr>/` die Worktrees `branch-src` (von `origin/<branch>`) und `basis-src` (von `origin/main`) anlegen. In `frontend/` jeweils `npm ci --silent` (oder `node_modules` verlinken, wenn `package-lock.json` gleich ist), mit den Testwerten aus AGENTS.md bauen und mit `npx vite preview --host 127.0.0.1 --strictPort` auf Port 4181 (nachher) bzw. 4182 (vorher) starten. Gibt es im Repository-Wurzelverzeichnis eine `.moach-session.json` (parallele Sitzung), nimm stattdessen `ports.qaAfter` bzw. `ports.qaBefore` daraus.
 2. `szenarien.json` schreiben (localStorage-Testdaten wie in `frontend/tests/today.spec.ts` und `frontend/tests/fixtures/`, festes Datum, sprechende Namen wie `heute-readiness-8-handy-dunkel`).
 3. Je Stand `node <repo>/.agents/skills/qa-taiga-ticket/scripts/shots.cjs <tmp>/qa-tg-<nr>/branch-src/frontend/node_modules/@playwright/test http://127.0.0.1:<port>/ <tmp>/qa-tg-<nr>/<nachher|vorher> <tmp>/qa-tg-<nr>/szenarien.json`.
 4. `python3 -I scripts/moach_taiga.py compare-shots <tmp>/qa-tg-<nr>/vorher <tmp>/qa-tg-<nr>/nachher`. **Ansehen musst du nur geänderte und neue Bilder**, dazu je ein Vorher-Bild zum Vergleich. Unverändert, obwohl die Story etwas Sichtbares ändern soll, ist ein Befund.

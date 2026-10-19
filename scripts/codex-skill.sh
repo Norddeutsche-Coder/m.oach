@@ -25,7 +25,7 @@ if [ "${1:-}" = "--dry-run" ]; then
 fi
 
 case "$skill" in
-  plan-taiga-epic|implement-taiga-ticket|qa-taiga-ticket|lukas-plant-setzt-um-testet-und-laedt-hoch)
+  plan-taiga-epic|implement-taiga-ticket|qa-taiga-ticket|lukas-plant-setzt-um-testet-und-laedt-hoch|parallel-taiga-session)
     profile=moach-deep
     ;;
   triage-taiga-issues|plan-taiga-sprint|finish-taiga-ticket)
