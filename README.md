@@ -33,7 +33,9 @@ Die bisherige App lässt sich separat mit `python3 -m http.server 8080 --directo
 
 Ein Push auf `main` startet automatisch `.github/workflows/deploy.yml`. Der Workflow veröffentlicht `frontend/dist/` erst, nachdem die vollständige CI einschließlich der Browserprüfungen erfolgreich war.
 
-Voraussetzungen sind die Pages-Quelle „GitHub Actions“ und die beiden gesetzten Repository-Variablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY`. Die Adresse ist `https://norddeutsche-coder.github.io/m.oach/`. Ihr Pfad entspricht dem Repository-Namen. Das Repository deshalb nicht umbenennen: GitHub leitet die alte Pages-Adresse nicht weiter. Bei einer anderen Domain verlieren Nutzer zusätzlich den Zugriff auf ihre im localStorage gespeicherten Daten.
+Voraussetzungen sind die Pages-Quelle „GitHub Actions“ und die beiden gesetzten Repository-Variablen `VITE_SUPABASE_URL` und `VITE_SUPABASE_PUBLISHABLE_KEY`. Die Live-App ist unter `https://m-oach.com/` erreichbar.
+
+Die frühere Pages-Adresse `https://norddeutsche-coder.github.io/m.oach/` bleibt während der Datenmigration als Brücke bestehen. Das Repository deshalb nicht umbenennen: GitHub leitet die alte Pages-Adresse nicht weiter. Ein Domainwechsel überträgt außerdem keine im localStorage gespeicherten Nutzerdaten zwischen den Adressen.
 
 Seit dem 16.10.2026 heißt das Repository `m.oach` statt `M.oach`. Die frühere Adresse `https://norddeutsche-coder.github.io/M.oach/` liefert seitdem eine 404-Seite.
 
