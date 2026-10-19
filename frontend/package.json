@@ -12,6 +12,8 @@
     "format": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:plan-golden-timezones": "node scripts/run-plan-golden-timezones.mjs",
+    "check:plan-test-api-absent": "node scripts/check-plan-test-api-absent.mjs",
     "test:e2e": "playwright test"
   },
   "engines": {
@@ -29,6 +31,7 @@
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
+    "jsdom": "^27.4.0",
     "prettier": "^3.9.10",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.2",
