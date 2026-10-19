@@ -1,6 +1,6 @@
 ---
 name: lukas-plant-setzt-um-testet-und-laedt-hoch
-description: Führt den ganzen Ablauf in einer Sitzung nacheinander aus, von der Idee bis zur Veröffentlichung, z. B. `/lukas-plant-setzt-um-testet-und-laedt-hoch Onboarding für neue Läufer` oder mit einer Story-Nummer `/lukas-plant-setzt-um-testet-und-laedt-hoch 27` (steigt nach Taiga-Status in die passende Stufe ein, auch zum Fortsetzen). Plant das Epic, setzt die Stories nacheinander um, lässt die QA unabhängig prüfen und erstellt nach bestandener QA automatisch PR und Merge, sobald alle Pipelines grün sind (bei riskanten Stories erst nach Go), mit anschließender Live-Prüfung. Läuft ohne Go durch. Mit `mit Vorschau` im Aufruf öffnet er bei Änderungen an der Oberfläche vor Commit und Push die alte und die geänderte Seite lokal nebeneinander im Browser.
+description: Führt den ganzen Ablauf in einer Sitzung nacheinander aus, von der Idee bis zur Veröffentlichung, z. B. `/lukas-plant-setzt-um-testet-und-laedt-hoch Onboarding für neue Läufer` oder mit einer Story-Nummer `/lukas-plant-setzt-um-testet-und-laedt-hoch 27` (steigt nach Taiga-Status in die passende Stufe ein, auch zum Fortsetzen). Plant das Epic, setzt eine Story um (mit `alle Stories` im Aufruf alle nacheinander), lässt die QA unabhängig prüfen und erstellt nach bestandener QA automatisch PR und Merge, sobald alle Pipelines grün sind (bei riskanten Stories erst nach Go), mit anschließender Live-Prüfung. Läuft ohne Go durch. Mit `mit Vorschau` im Aufruf öffnet er bei Änderungen an der Oberfläche vor Commit und Push die alte und die geänderte Seite lokal nebeneinander im Browser.
 argument-hint: <idee> | <story-nummer>
 disable-model-invocation: true
 effort: high
@@ -14,6 +14,7 @@ Dieser Skill verkettet `plan-taiga-epic` → `implement-taiga-ticket` → (auf W
 
 **Eingabe:**
 - **Idee in Freitext** → Start bei Stufe 1.
+- **`alle Stories`** irgendwo im Aufruf → nach einer Story folgt die nächste in derselben Sitzung (siehe „Nächste Story“). Sonst endet der Ablauf nach einer Story.
 - **`mit Vorschau`** irgendwo im Aufruf → Stufe 3 läuft bei Änderungen an der Oberfläche. Sonst entfällt sie.
 - **Story-Nummer** (`27` oder `#27`) → Stufe 1 entfällt, Einstieg nach Status (siehe unten).
 - Fehlt beides, frag danach und mach nichts weiter.
@@ -104,7 +105,12 @@ Folge `finish-taiga-ticket`. PR und Merge laufen ohne Haltepunkt, solange alle B
 
 ## Nächste Story
 
-Stammen die Stories aus Stufe 1 und sind noch welche auf `Bereit`, folgt ohne Frage die nächste (Auswahl wie in Stufe 1). In einer Sitzung laufen Stories nacheinander. Parallel arbeiten geht über weitere Sitzungen mit anderen Story-Nummern (kein WIP-Limit). Jede neue Story beginnt mit einem Branch vom dann aktuellen `origin/main`.
+Sind aus Stufe 1 noch Stories auf `Bereit`:
+
+- **Standard:** Der Ablauf endet hier, damit jede Story in einer frischen, kleinen Sitzung läuft. Nenne je Story den Befehl für eine neue Sitzung (`/lukas-plant-setzt-um-testet-und-laedt-hoch <nr>`) und welche davon unabhängig sind und parallel laufen können (keine Abhängigkeit untereinander, nicht beide an `src/legacy/app.js` oder `src/app.css`).
+- **Mit `alle Stories`:** ohne Frage weiter mit der nächsten (Auswahl wie in Stufe 1), in derselben Sitzung nacheinander.
+
+Jede neue Story beginnt mit einem Branch vom dann aktuellen `origin/main`.
 
 ## Haltepunkte im Überblick
 
