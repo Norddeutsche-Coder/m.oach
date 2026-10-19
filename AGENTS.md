@@ -43,7 +43,7 @@ Zeilenabdeckung für `src/lib/` und `src/features/`.
 Vor jedem Commit müssen `check`, `lint`, `test`, `build` und `test:e2e` grün sein. Die CI prüft dasselbe.
 
 **Mit Tokens haushalten:**
-- **Gezielt lesen:** Dateien über etwa 300 Zeilen nie ganz lesen. Erst `grep -n`, dann nur den Ausschnitt. Das gilt besonders für `src/legacy/app.js` (~93.000 Tokens) und `src/app.css`.
+- **Gezielt lesen:** Dateien über etwa 300 Zeilen nie ganz lesen. Erst `grep -n`, dann nur den Ausschnitt. Das gilt besonders für `src/legacy/app.js` (~93.000 Tokens) und `src/app.css` (~18.000 Tokens).
 - **Kompakte Ausgaben:** `npm test -- --reporter=dot`, `npx playwright test --reporter=dot`, `npm ci --silent`, sonst `… 2>&1 | tail -n 30`. Bei Fehlern die relevante Ausgabe vollständig ansehen.
 - Was die CI für denselben Commit schon geprüft hat, nicht lokal wiederholen.
 

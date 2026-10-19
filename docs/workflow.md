@@ -14,10 +14,10 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 
 ## 2. Mit Tokens gut haushalten
 
-- **Eine frische Sitzung pro Skill** (`/clear` vor jedem Aufruf). Die Skills laden alles Nötige aus Taiga und Git neu. Die QA läuft in Claude Code als Subagent ohne Vorgeschichte (`context: fork`).
-- **Gezielt lesen:** Dateien über etwa 300 Zeilen nie ganz lesen, sondern zuerst mit `grep -n` die Stelle finden und dann nur den Ausschnitt. Das gilt besonders für `frontend/src/legacy/app.js` (~93.000 Tokens) und `frontend/src/app.css` (~18.000 Tokens).
-- **Kompakte Ausgaben:** Prüfbefehle so ausführen, dass bei Erfolg nur das Ergebnis erscheint, z. B. `npm test -- --reporter=dot`, `npx playwright test --reporter=dot`, `npm ci --silent`, sonst `… 2>&1 | tail -n 30`. Bei Fehlern die relevante Ausgabe vollständig ansehen.
-- **Ergebnisse übernehmen statt wiederholen:** Was die CI für denselben Commit geprüft hat, nicht lokal noch einmal ausführen.
+Gezielt lesen, kompakte Ausgaben und CI-Ergebnisse übernehmen: siehe AGENTS.md („Mit Tokens haushalten“). Zusätzlich:
+
+- **Eine frische Sitzung pro Skill und pro Story** (`/clear` vor jedem Aufruf). Die Skills laden alles Nötige aus Taiga und Git neu. Die QA läuft in Claude Code als Subagent ohne Vorgeschichte (`context: fork`).
+- **Parallel statt nacheinander:** Unabhängige Stories in getrennten Sitzungen starten, statt sie in einer Sitzung aneinanderzuhängen. Jede Sitzung bleibt so klein.
 
 ## 3. Rollen und Fragen
 
@@ -51,7 +51,7 @@ Gemeinsame Regeln für alle Skills unter `.agents/skills/` und alle Agenten (Cla
 
 Eine Abnahme durch eine andere Person gibt es nicht mehr. Die QA und die Live-Prüfung nach dem Merge ersetzen sie.
 
-**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Er läuft ohne Go durch, auch PR und Squash-Merge, sobald die QA bestanden ist und alle Pipelines grün sind. Nur bei riskanten Stories hält er vor PR und Merge an. Auf Wunsch (`mit Vorschau` im Aufruf) öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser.
+**Alles in einem Ablauf:** `/lukas-plant-setzt-um-testet-und-laedt-hoch <idee | nr>` führt `plan-taiga-epic` und 1–3 nacheinander in einer Sitzung aus. Standardmäßig eine Story pro Sitzung, mit `alle Stories` im Aufruf alle nacheinander. Er läuft ohne Go durch, auch PR und Squash-Merge, sobald die QA bestanden ist und alle Pipelines grün sind. Nur bei riskanten Stories hält er vor PR und Merge an. Auf Wunsch (`mit Vorschau` im Aufruf) öffnet er vor Commit und Push die alte und die geänderte Seite lokal mit Testdaten nebeneinander im Browser.
 
 ## 6. Sprint, Zuordnung und parallele Arbeit
 
