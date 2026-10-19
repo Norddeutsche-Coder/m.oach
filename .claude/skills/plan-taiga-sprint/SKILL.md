@@ -1,6 +1,6 @@
 ---
 name: plan-taiga-sprint
-description: Schließt den laufenden Taiga-Sprint ab (Bilanz, unfertige Stories, Retro und Sprint-Bericht in Alltagssprache im Wiki) und plant den nächsten nach Kapazität, Velocity und festen Prioritätsregeln. Aufruf `/plan-taiga-sprint`. Fragt per Auswahl nach Abweichungen, Änderungen und Freigabe und legt erst nach Go an.
+description: Schließt den laufenden Taiga-Sprint ab (Bilanz, unfertige Stories, Retro und Sprint-Bericht in Alltagssprache im Wiki) und plant den nächsten nach Kapazität, Velocity und festen Prioritätsregeln. Aufruf `/plan-taiga-sprint`. Legt ohne Go an, nur die Retro fragt per Auswahl.
 argument-hint: (keine)
 disable-model-invocation: true
 model: sonnet
@@ -11,7 +11,7 @@ effort: medium
 
 > Gemeinsame Regeln: `docs/workflow.md` (zu Beginn lesen). Helfer: `python3 -I scripts/moach_taiga.py <befehl>`. Sprintlänge 14 Tage, Standard-Kapazität 14 Arbeitstage (1 Punkt = 1 Arbeitstag).
 
-Dialog mit kurzen Zusammenfassungen und Entscheidungen über das Auswahl-Werkzeug. In Taiga ändert sich **erst nach Go** der aufrufenden Person etwas.
+Kurze Zusammenfassungen im Chat. Der Skill ändert Taiga **ohne Go**. Über das Auswahl-Werkzeug laufen nur die Fragen der Retro.
 
 ## Phase 1: Lage
 
@@ -22,26 +22,26 @@ Dialog mit kurzen Zusammenfassungen und Entscheidungen über das Auswahl-Werkzeu
 ## Phase 2: Abschluss
 
 1. **Bilanz:** geplant, erledigt (`Fertig`), Stories je Status, nachträglich aufgenommene Stories gesondert. Sie zählen zu erledigt, nicht zu geplant.
-2. **Unfertige Stories** wandern mit. Bei `Im Test`, `Im Review` oder `Abnahme` sinken die Punkte auf 25 %, berechnet mit dem Skript (`reduce-points`). Alle anderen behalten ihre Punkte. Zeig eine Liste mit Punkten alt → neu.
-3. **Retro:** Erfüllungsquote, Velocity, Stories, die deutlich länger dauerten (Anzahl der QA-, Abnahme- und Release-Tasks). Dann nacheinander drei Fragen mit je 2–3 Vorschlägen aus den Daten: Was lief gut? Was lief schlecht? Was ändert sich?
+2. **Unfertige Stories** wandern mit. Bei `Im Test` oder `Im Review` sinken die Punkte auf 25 %, berechnet mit dem Skript (`reduce-points`). Alle anderen behalten ihre Punkte. Zeig eine Liste mit Punkten alt → neu.
+3. **Retro:** Erfüllungsquote, Velocity, Stories, die deutlich länger dauerten (Anzahl der QA- und Release-Tasks). Dann nacheinander drei Fragen mit je 2–3 Vorschlägen aus den Daten: Was lief gut? Was lief schlecht? Was ändert sich?
 4. **Sprint-Bericht** in Alltagssprache entwerfen: was fertig ist und was Läufer davon haben, was sich verschoben hat und warum, was kommt. Höchstens 10 Zeilen, ohne Fachbegriffe.
-5. Zeig, was passieren wird, und hol das Go ein. Danach:
-   - je betroffener Story erst der Kommentar `Punkte für Sprint <neu> von <alt> auf <neu> gesenkt (Umsetzung fertig, nur noch QA, Abnahme bzw. Abschluss offen).`, dann `reduce-points <nrn>`,
+5. Zeig, was passieren wird, und führ es ohne Warten aus:
+   - je betroffener Story erst der Kommentar `Punkte für Sprint <neu> von <alt> auf <neu> gesenkt (Umsetzung fertig, nur noch QA bzw. Abschluss offen).`, dann `reduce-points <nrn>`,
    - `close-sprint "<Name>"`,
    - Retro oben in die Wiki-Seite `retrospektiven` nach `templates/retro.md`, Sprint-Bericht oben in `sprint-berichte` (Überschrift `## Sprint <n> · <start>–<ende>`),
    - Vorschlag für eine Vorführung von 15 Minuten (2–3 Stories, Live-App oder Screenshots).
 
 ## Phase 3: Planung
 
-1. **Kapazität** einmal abfragen („Nein, 14 Tage (Recommended)“, „2–3 Tage weniger“, „eine Woche weniger“).
+1. **Kapazität:** 14 Arbeitstage, außer die aufrufende Person nennt im Aufruf einen anderen Wert.
 2. **Planungsziel** = Velocity (Ø der letzten bis zu 3 Sprints), höchstens die Kapazität. Ohne abgeschlossenen Sprint 90 % der Kapazität, abgerundet auf ½.
 3. **Reihenfolge**, bis das Ziel erreicht ist: `hotfix` → übernommene Stories → `sicherheit`, `rls`, `datenverlust` → `bug` → übrige mit erfüllten oder vorher eingeplanten Abhängigkeiten, nach Epic und Story-Nummer. Regeln:
    - Nur `Bereit` (außer übernommene und `hotfix`). Stories auf `Neu` prüfst du gegen die Definition of Ready: Ist sie erfüllt, auf `Bereit` setzen (mit Kommentar) und aufnehmen. Sonst unter „vor dem Einplanen klären“ mit dem fehlenden Punkt.
    - Ungeschätzte Stories nicht vorschlagen, sondern als „schätzen“ listen.
    - Das Ziel wird nicht überschritten. Passt die nächste Story nicht, kleinere weiter unten prüfen.
-4. **Vorschlag** als kurze Tabelle (Nr., Titel, Punkte, Grund), Summe gegen Ziel, 3–5 knappe Kandidaten. Anpassen per Auswahl (Go / Story tauschen / Ziel ändern) bis zum Go.
+4. **Vorschlag** als kurze Tabelle (Nr., Titel, Punkte, Grund), Summe gegen Ziel, 3–5 knappe Kandidaten. Danach ohne Warten anlegen.
 
-## Phase 4: Anlegen (nach Go)
+## Phase 4: Anlegen
 
 Sprint `Sprint <n+1>` anlegen (Start am Tag nach dem letzten Sprint, Ende Start + 13 Tage), Stories zuordnen, Punktsumme prüfen, `sort-sprint`.
 
@@ -51,4 +51,4 @@ Bilanz und übernommene Stories (alt → neu), Links zu Retro und Sprint-Bericht
 
 ## Grenzen
 
-Nichts löschen. Keine Stories anlegen oder inhaltlich ändern, außer Punkte senken (nach Go) und `Bereit` bei erfüllter Definition of Ready. Kein Sprint ohne Go anlegen, schließen oder befüllen. Kein Code.
+Nichts löschen. Keine Stories anlegen oder inhaltlich ändern, außer Punkte senken und `Bereit` bei erfüllter Definition of Ready. Kein Code.
