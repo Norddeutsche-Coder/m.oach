@@ -8,6 +8,10 @@ dist-ssr/
 *.local
 backend/supabase/.temp/
 backend/supabase/.branches/
+
+# Parallel agent sessions (parallel-taiga-session skill)
+.claude/worktrees/
+.moach-session.json
 playwright-report/
 test-results/
 coverage/

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Parallele Sitzung"
+  short_description: "Lässt mehrere Agent-Sitzungen gleichzeitig Stories umsetzen, jede im eigenen Worktree"
+policy:
+  allow_implicit_invocation: false

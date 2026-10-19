@@ -8,7 +8,7 @@
 // [{ "name", "date", "localStorage", "tab", "click", "viewport": "phone" | "desktop", "dark" }]
 // "Nachher" is the working tree of <frontend-dir> on a Vite dev server, so edits show up at once.
 // "Vorher" is <git-ref> checked out as a git worktree next to szenarien.json, built once and
-// served with vite preview. Ports are the first free ones from 4183 to 4189, apart from the usual
+// served with vite preview. Ports are the first free ones from 4183 to 4189 (in a parallel session from its own range), apart from the usual
 // dev port so the test data does not mix with local data. Every scenario opens in its own window,
 // with --vorher once per state, labelled VORHER and NACHHER. When all windows are closed, servers
 // and worktree are removed and the script exits. A scenario whose page, tab or click target cannot
@@ -68,9 +68,18 @@ const isFree = port => new Promise(resolve => {
   const server = net.createServer().once('error', () => resolve(false))
   server.listen(port, host, () => server.close(() => resolve(true)))
 })
+// A parallel session (parallel-taiga-session skill) has its own port range in .moach-session.json.
+const portRange = (() => {
+  try {
+    const { ports } = JSON.parse(fs.readFileSync(path.join(repoRoot, '.moach-session.json'), 'utf8'))
+    if (ports.previewFrom && ports.previewTo) return [ports.previewFrom, ports.previewTo]
+  } catch {}
+  return [4183, 4189]
+})()
 async function freePort(taken) {
-  for (let p = 4183; p <= 4189; p++) if (!taken.includes(p) && (await isFree(p))) return p
-  fail('kein freier Port zwischen 4183 und 4189')
+  const [from, to] = portRange
+  for (let p = from; p <= to; p++) if (!taken.includes(p) && (await isFree(p))) return p
+  fail(`kein freier Port zwischen ${from} und ${to}`)
 }
 
 function viteArgs(dir, ...rest) {
