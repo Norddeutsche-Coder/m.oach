@@ -50,8 +50,12 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm run test:coverage
+      - name: Plan golden master in both time zones
+        run: npm run test:plan-golden-timezones
       - name: Build
         run: npm run build
+      - name: Check that the plan test API is absent from the bundle
+        run: npm run check:plan-test-api-absent
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Browser tests

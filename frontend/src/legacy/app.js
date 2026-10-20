@@ -50,7 +50,8 @@ const ph=w=>{const C=CF(),T=C.T;if(C.mode=='maintain')return'Erhaltung';return w
 function vol(w){const A=CF().A;if(w>=A[0][0])return A[0][1];if(w<=0)return A[A.length-1][1];for(let i=0;i<A.length-1;i++){const[a,x]=A[i],[b,y]=A[i+1];if(w<=a&&w>=b)return a==b?x:y+(x-y)*(w-b)/(a-b)}return A[A.length-1][1]}
 const gp=()=>S.goal/42.195;
 const WF=d=>{const a=S.wkadj;return a&&a[iso(mon(d))]||1};
-function expP(d){const b=S.base/42.195,e=addD(mon(parse(S.race)),-35),f=Math.max(0,Math.min(1,(d-START)/(e-START)));return b+(gp()-b)*f}
+function calDays(a,b){const end=iso(b),start=iso(a);if(start==end)return 0;const step=start<end?1:-1;let n=0,d=parse(start);while(iso(d)!=end){d=addD(d,step);n+=step}return n}
+function expP(d){const b=S.base/42.195,e=addD(mon(parse(S.race)),-35),f=Math.max(0,Math.min(1,calDays(START,d)/calDays(START,e)));return b+(gp()-b)*f}
 function fitP(){let b=null;for(const r of S.res){const p=r.sec*Math.pow(42.195/r.km,1.06)/42.195;if(!b||r.d>=b.d)b={d:r.d,p,r}}return b}
 function Z(d){const f=fitP();let P=f?f.p:expP(d);P=Math.max(P,gp());return{mp:P,e1:P*1.16,e2:P*1.3,t:P*.945,i:P*.91,r:P*.87}}
 let AD={f:1,msg:'Noch zu wenig Daten – trage deine Läufe ein, dann passt sich der Plan an.'};
@@ -1838,6 +1839,11 @@ function wzState(a){
  if(mt){const race=iso(addD(mon(parse(a.start)),a.weeks*7-1));return{race,goal:base,goalT:null,rd:42.195,base,start:a.start,cfg,tune:tn(race)}}
  const rd=+a.rd,gT=(+a.gh)*3600+(+a.gm)*60+(+a.gs||0);
  return{race:a.race,goal:Math.round(gT*Math.pow(42.195/rd,1.06)),goalT:rd<40?gT:null,rd,base,start:a.start,cfg,tune:tn(a.race)}}
+if(import.meta.env.MODE==='test')return{__planGoldenMaster:{
+ setState:state=>{S=Object.assign(DEF(),JSON.parse(JSON.stringify(state||{})));START=parse(S.start||'2026-10-12')},
+ plan,Z,ph,vol,progn,wzState,wtr,
+ dispose:()=>lifecycle.dispose()
+},dispose:()=>lifecycle.dispose()};
 function archivePlan(newStart){
  if(S.noPlan)return;
  const old=S.start||'2026-10-12',until=iso(addD(newStart?parse(newStart):today,-1));
