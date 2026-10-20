@@ -1,5 +1,42 @@
 import { describe, expect, it } from 'vitest'
-import { longRunHint, longRunLimit, plannedLongRun, taperLongRunLimit } from './wizard'
+import {
+  expectedPace,
+  longRunHint,
+  longRunLimit,
+  plannedLongRun,
+  taperLongRunLimit,
+} from './wizard'
+
+describe('expected pace', () => {
+  const basePace = 360
+  const goalPace = 300
+
+  it('uses a finite goal pace when the race is exactly 35 days away', () => {
+    const pace = expectedPace(basePace, goalPace, 0, 0)
+
+    expect(pace).toBe(goalPace)
+    expect(Number.isFinite(pace)).toBe(true)
+  })
+
+  it('uses a finite goal pace when the race is less than 35 days away', () => {
+    const pace = expectedPace(basePace, goalPace, 0, -14)
+
+    expect(pace).toBe(goalPace)
+    expect(Number.isFinite(pace)).toBe(true)
+  })
+
+  it('interpolates finite paces from the start to the goal for a much longer plan', () => {
+    const buildupDays = 105
+    const paces = [
+      expectedPace(basePace, goalPace, 0, buildupDays),
+      expectedPace(basePace, goalPace, buildupDays / 2, buildupDays),
+      expectedPace(basePace, goalPace, buildupDays, buildupDays),
+    ]
+
+    expect(paces).toEqual([basePace, 330, goalPace])
+    expect(paces.every(Number.isFinite)).toBe(true)
+  })
+})
 
 describe('planned long run', () => {
   it.each([
