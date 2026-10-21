@@ -40,6 +40,31 @@ MAX_FORUM_TAGS = 5
 MAX_MESSAGE = 2000
 MAX_SUBJECT = 200
 
+# Must match JOIN_BUTTON_ID in backend/supabase/functions/discord-interactions/handler.ts.
+TESTER_JOIN_ID = "moach_tester_join"
+WELCOME_CHANNEL = "willkommen"
+WELCOME_HEADING = "# Willkommen bei M.oach"
+WELCOME_BUTTON_LABEL = "Ich will testen"
+WELCOME_MESSAGE = f"""{WELCOME_HEADING} 🏃
+Kurz gesagt: Hier testen wir gemeinsam M.oach, einen Marathon-Coach als App. Probier sie aus und sag uns, was gut läuft und was nicht.
+
+**App:** {APP_URL}
+
+**So machst du mit**
+**Freischalten:** Noch siehst du nur diesen Bereich. Klick unten auf „{WELCOME_BUTTON_LABEL}“, dann bekommst du sofort die Rolle Testläufer.
+
+• Ideen und Eindrücke → <#1561389878837776394>
+• Fehler → <#1561389880590995639> (ein Beitrag pro Fehler: was du gemacht hast, was passiert ist, welches Gerät)
+• Fragen → <#1561389882381705217>
+
+**Regeln**
+1. Freundlich bleiben.
+2. **Keine Zugangsdaten posten**, auch nicht den Intervals.icu-API-Schlüssel, auch nicht in Screenshots.
+3. Keine Gesundheitsdaten anderer teilen. Bei eigenen Daten nur, was du wirklich zeigen willst.
+4. M.oach ersetzt keinen Arzt. Bei Schmerzen oder Verletzungen bitte ärztlich abklären lassen."""
+WELCOME_SCREEN_DESCRIPTION = ("Hier testen wir M.oach, einen Marathon-Coach als App. "
+                              "Lies kurz die Regeln und klick in #willkommen auf „Ich will testen“.")
+
 
 class Taiga:
     def __init__(self, slug):
@@ -229,6 +254,24 @@ def bug_news_text(text):
 
 def bug_fixed_reply(news_link):
     return f"Behoben ✅ Mehr dazu: {news_link}"
+
+
+def welcome_payload():
+    # Green button (style 3); the Edge Function discord-interactions handles the click.
+    button = {"type": 2, "style": 3, "label": WELCOME_BUTTON_LABEL, "custom_id": TESTER_JOIN_ID}
+    return {"content": WELCOME_MESSAGE, "components": [{"type": 1, "components": [button]}],
+            "allowed_mentions": {"parse": []}}
+
+
+def find_welcome_message(messages, bot_id):
+    return next((m for m in messages or [] if (m.get("author") or {}).get("id") == bot_id
+                 and (m.get("content") or "").startswith(WELCOME_HEADING)), None)
+
+
+def welcome_screen_patch(current):
+    if (current or {}).get("description") == WELCOME_SCREEN_DESCRIPTION:
+        return None
+    return {"description": WELCOME_SCREEN_DESCRIPTION}
 
 
 def discord_call(method, path, body=None, token=None, allow_404=False):
@@ -527,6 +570,38 @@ def cmd_discord_bug_fixed(_, args):
     print(f"Beitrag „{thread.get('name', thread_id)}“: Antwort geschrieben, Tag „{TAG_FIXED}“ gesetzt.")
 
 
+def cmd_discord_welcome(_, args):
+    token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+    if not token:
+        print("übersprungen: DISCORD_BOT_TOKEN nicht gesetzt")
+        return
+    prefix = "Probelauf, würde ändern: " if args.dry_run else ""
+    bot_id = discord_call("GET", "/users/@me", token=token)["id"]
+    channels = discord_call("GET", f"/guilds/{DISCORD_GUILD_ID}/channels", token=token)
+    channel = next((c for c in channels if c.get("name") == WELCOME_CHANNEL), None)
+    if not channel:
+        sys.exit(f"Kanal #{WELCOME_CHANNEL} nicht gefunden.")
+    messages = discord_call("GET", f"/channels/{channel['id']}/messages?limit=50", token=token)
+    existing = find_welcome_message(messages, bot_id)
+    if existing:
+        if not args.dry_run:
+            discord_call("PATCH", f"/channels/{channel['id']}/messages/{existing['id']}", welcome_payload(), token)
+        print(f"{prefix}Willkommensnachricht in #{WELCOME_CHANNEL} aktualisiert.")
+    else:
+        if not args.dry_run:
+            msg = discord_call("POST", f"/channels/{channel['id']}/messages", welcome_payload(), token)
+            discord_call("PUT", f"/channels/{channel['id']}/pins/{msg['id']}", token=token)
+        print(f"{prefix}Willkommensnachricht in #{WELCOME_CHANNEL} gepostet und angepinnt.")
+    screen = discord_call("GET", f"/guilds/{DISCORD_GUILD_ID}/welcome-screen", token=token, allow_404=True)
+    patch = welcome_screen_patch(screen)
+    if patch is None:
+        print("Begrüßungsfenster ist aktuell.")
+        return
+    if not args.dry_run:
+        discord_call("PATCH", f"/guilds/{DISCORD_GUILD_ID}/welcome-screen", patch, token)
+    print(f"{prefix}Beschreibung im Begrüßungsfenster aktualisiert.")
+
+
 def cmd_discord_news_check(t, args):
     us = t.story(args.ref)
     epics = us.get("epics") or []
@@ -637,9 +712,12 @@ def main():
     p = sub.add_parser("discord-news-check", help="Epic-Ankündigung, Bug und Discord-Beitrag einer Story")
     p.add_argument("ref", type=int)
     sub.add_parser("discord-bugs-import", help="neue Beiträge aus Forum #bugs als Taiga-Issues anlegen")
+    p = sub.add_parser("discord-welcome",
+                       help="Willkommensnachricht mit Knopf „Ich will testen“ und Begrüßungsfenster pflegen (ohne Taiga)")
+    p.add_argument("--dry-run", action="store_true", help="nur anzeigen, was geändert würde")
     args = parser.parse_args()
 
-    if args.command in ("compare-shots", "discord-news", "discord-bug-fixed"):
+    if args.command in ("compare-shots", "discord-news", "discord-bug-fixed", "discord-welcome"):
         return globals()["cmd_" + args.command.replace("-", "_")](None, args)
     if args.command == "discord-bugs-import":
         missing = [n for n in ("DISCORD_BOT_TOKEN", "TAIGA_USERNAME", "TAIGA_PASSWORD")

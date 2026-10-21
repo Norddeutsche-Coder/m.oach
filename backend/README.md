@@ -76,12 +76,82 @@ backend/
     │   ├── 20261017000000_remote_schema.sql
     │   └── 20261017190000_harden_coach_request_rls.sql
     ├── functions/
+    │   └── discord-interactions/
+    │       ├── deno.json
+    │       ├── handler.test.ts
+    │       ├── handler.ts
+    │       └── index.ts
     └── tests/
         └── coach_requests_rls.test.sql
 ```
 
-Der Ordner `functions/` wird angelegt, sobald eine Edge Function im Repository umgesetzt wird. Er
-bleibt leer, solange das verbundene Projekt keine Function enthält.
+Jede Edge Function liegt in einem eigenen Ordner unter `functions/`.
+
+## Edge Function discord-interactions
+
+Kurz gesagt: Wer auf dem Discord-Server von M.oach in #willkommen auf „Ich will testen“ klickt,
+bekommt sofort die Rolle Testläufer. Diese Function nimmt den Klick von Discord entgegen und
+vergibt die Rolle.
+
+Discord schickt jeden Klick an die Function. Sie prüft die Ed25519-Signatur der Anfrage, beantwortet
+Discords PING und vergibt beim Klick auf den Knopf die Rolle „Testläufer“ über die Discord-API. Die
+Antwort sieht nur die klickende Person. Die Function speichert nichts und schreibt keine Logs, also
+auch keine Nutzer-IDs.
+
+### Lokal testen
+
+Die Tests brauchen kein Netzwerk und keine Zugangsdaten. Im Ordner der Function:
+
+```sh
+cd backend/supabase/functions/discord-interactions
+npx --yes deno@2 test --no-prompt
+```
+
+Die CI prüft zusätzlich `deno fmt --check`, `deno lint` und `deno check index.ts handler.ts`.
+
+### Einrichtung nach dem Merge (nur fynndow)
+
+Diese Schritte ändern das Live-Projekt und den Discord-Server. Sie werden nur von fynndow nach dem
+Merge ausgeführt. `<ref>` ist die Projekt-Referenz des Supabase-Projekts.
+
+1. Function bereitstellen. `verify_jwt = false` kommt aus `supabase/config.toml`, weil Discord kein
+   Supabase-JWT mitschickt; geschützt ist die Function über die Signatur.
+
+   ```sh
+   cd backend
+   npx supabase functions deploy discord-interactions --project-ref <ref>
+   ```
+
+2. Secrets setzen. Die Werte selbst eingeben, nie committen oder in Issues kopieren. Den Public Key
+   gibt es im Discord Developer Portal unter „General Information“, das Bot-Token unter „Bot“.
+
+   ```sh
+   npx supabase secrets set --project-ref <ref> DISCORD_PUBLIC_KEY=… DISCORD_BOT_TOKEN=…
+   ```
+
+3. Im Discord Developer Portal unter „General Information“ als „Interactions Endpoint URL“
+   eintragen:
+
+   ```text
+   https://<ref>.supabase.co/functions/v1/discord-interactions
+   ```
+
+   Discord prüft beim Speichern mit einem PING und einer Anfrage mit ungültiger Signatur. Das
+   Speichern klappt nur, wenn die Function läuft und der Public Key stimmt.
+
+4. Bot-Rechte auf dem Server: Der Bot braucht „Rollen verwalten“, und die Rolle „m.oach bot“ muss
+   in der Rollenliste über „Testläufer“ stehen. Sonst kann er die Rolle nicht vergeben.
+
+5. Willkommensnachricht mit Knopf und Begrüßungsfenster einrichten, erst als Probelauf, dann
+   wirklich (aus dem Wurzelverzeichnis des Repositorys, `DISCORD_BOT_TOKEN` muss gesetzt sein):
+
+   ```sh
+   python3 -I scripts/moach_taiga.py discord-welcome --dry-run
+   python3 -I scripts/moach_taiga.py discord-welcome
+   ```
+
+   Der Befehl bearbeitet eine vorhandene Willkommensnachricht des Bots oder postet und pinnt eine
+   neue. Er kann beliebig oft laufen.
 
 ## Secrets und Live-Projekt
 
