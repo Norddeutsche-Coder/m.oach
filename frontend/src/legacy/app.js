@@ -5,7 +5,8 @@ import { createLifecycle } from '../lib/lifecycle'
 import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
-import { expectedPace, longRunHint, taperLongRunLimit } from '../features/plan/wizard'
+import { longRunHint, taperLongRunLimit } from '../features/plan/wizard'
+import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
 
@@ -50,10 +51,10 @@ const ph=w=>{const C=CF(),T=C.T;if(C.mode=='maintain')return'Erhaltung';return w
 function vol(w){const A=CF().A;if(w>=A[0][0])return A[0][1];if(w<=0)return A[A.length-1][1];for(let i=0;i<A.length-1;i++){const[a,x]=A[i],[b,y]=A[i+1];if(w<=a&&w>=b)return a==b?x:y+(x-y)*(w-b)/(a-b)}return A[A.length-1][1]}
 const gp=()=>S.goal/42.195;
 const WF=d=>{const a=S.wkadj;return a&&a[iso(mon(d))]||1};
-function calDays(a,b){const end=iso(b),start=iso(a);if(start==end)return 0;const step=start<end?1:-1;let n=0,d=parse(start);while(iso(d)!=end){d=addD(d,step);n+=step}return n}
-function expP(d){const b=S.base/42.195,e=addD(mon(parse(S.race)),-35);return expectedPace(b,gp(),calDays(START,d),calDays(START,e))}
-function fitP(){let b=null;for(const r of S.res){const p=r.sec*Math.pow(42.195/r.km,1.06)/42.195;if(!b||r.d>=b.d)b={d:r.d,p,r}}return b}
-function Z(d){const f=fitP();let P=f?f.p:expP(d);P=Math.max(P,gp());return{mp:P,e1:P*1.16,e2:P*1.3,t:P*.945,i:P*.91,r:P*.87}}
+const paceSchedule=()=>({baseSeconds:S.base,goalSeconds:S.goal,start:iso(START),race:S.race});
+function expP(d){return expectedPlanPace(d,paceSchedule())}
+function fitP(){return fitPaces(S.res)}
+function Z(d){return paceZones(d,Object.assign(paceSchedule(),{results:S.res}))}
 let AD={f:1,msg:'Noch zu wenig Daten – trage deine Läufe ein, dann passt sich der Plan an.'};
 function calcAd(){let pl=0,ac=0,rs=[],n=0;AD={f:1,msg:AD.msg};
  for(let i=1;i<=14;i++){const d=addD(today,-i);if(d<START)break;const p=plan(d,1),l=S.log[iso(d)];if(p&&p.km)pl+=p.km;if(l&&l.done){n++;ac+=+l.km||0;if(l.rpe&&i<=7)rs.push(+l.rpe)}}
@@ -125,9 +126,8 @@ function planCore(d,na){
 /* ===== Vorbereitungswettkämpfe ===== */
 const TKL=km=>Math.abs(km-42.195)<.3?'Marathon':Math.abs(km-21.0975)<.3?'Halbmarathon':r1(km)+' km';
 const TKS=km=>Math.abs(km-42.195)<.3?'Marathon':Math.abs(km-21.0975)<.3?'HM':r1(km)+' km';
-function tuneTarget(km){let m=null;
- try{const P=progn(),x=P[km];if(x)return x.sec;m=P[42.195]}catch(e){}
- const f=fitP(),mar=m?m.sec:(f?f.p*42.195:S.base);return mar*Math.pow(km/42.195,1.06)}
+function tuneTarget(km){let runs=[];try{runs=allRuns()}catch(e){}
+ return tuneTargetFor(km,{runs,results:S.res,baseSeconds:S.base,asOf:today})}
 function tuneDay(t,d,p){
  const km=+t.km,full=t.m!='t',lab=TKL(km),tg=tuneTarget(km),add=km>=40?0:km>=15?3:5,nm=(t.n||'').trim();
  const head=(nm?esc(nm)+': ':'')+lab+'-Wettkampf als Vorbereitung. ';
@@ -828,17 +828,7 @@ lifecycle.listen(document,'keydown',e=>{const t=e.target&&e.target.dataset&&e.ta
 
 /* ===== Prognose aus Läufen ===== */
 const PD=[[5,'5 km'],[10,'10 km'],[15,'15 km'],[21.0975,'Halbmarathon'],[42.195,'Marathon']];
-function prognAt(runs,asOf){
- const asd=asOf?parse(asOf):today,hi=iso(asd),lo=iso(addD(asd,-7*26)),o={};
- for(const[dk]of PD){let best=null;
-  for(const r of runs){
-   if(!(r.km>=3&&r.sec>0)||r.d>hi||r.d<lo)continue;
-   const pc=r.sec/r.km;if(pc<150||pc>540||r.km>70)continue;
-   if(dk>=10&&r.km<dk*.3)continue;
-   const wk=Math.max(0,(asd-parse(r.d))/(7*D)),raw=r.sec*Math.pow(dk/r.km,1.06),adj=raw*(1+.004*wk);
-   if(!best||adj<best.adj)best={adj,sec:adj,raw,r}}
-  if(best)o[dk]=best}
- return o}
+function prognAt(runs,asOf){return prognosis(runs,asOf?parse(asOf):today)}
 const progn=()=>prognAt(allRuns());
 function progCard(){
  const P=progn(),K=RD(),M=P[42.195],n=allRuns().length;
