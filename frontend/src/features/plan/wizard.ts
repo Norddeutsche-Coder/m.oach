@@ -3,6 +3,18 @@ export interface LongRunOptions {
   maintain?: boolean
 }
 
+/** Expected pace during the buildup, linearly progressing from the base to the goal pace. */
+export function expectedPace(
+  basePace: number,
+  goalPace: number,
+  elapsedDays: number,
+  buildupDays: number,
+): number {
+  if (buildupDays <= 0) return goalPace
+  const progress = Math.max(0, Math.min(1, elapsedDays / buildupDays))
+  return basePace + (goalPace - basePace) * progress
+}
+
 // Mirrors the plan generator in legacy/app.js: the long run is 25–40 % of the weekly volume (`ls`).
 const longRunShare = (peak: number, cap: number) => Math.max(0.25, Math.min(0.4, cap / peak))
 
