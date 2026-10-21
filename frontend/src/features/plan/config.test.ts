@@ -2,6 +2,33 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildCfg, isDeload, phase, taperWeeks, volume } from './config'
 
 type ConfigInput = Parameters<typeof buildCfg>[0]
+type TestProcess = {
+  cwd: () => string
+  execPath: string
+}
+type TestOutput = {
+  setEncoding: (encoding: 'utf8') => void
+  on: (event: 'data', listener: (chunk: string) => void) => void
+}
+type TestChildProcess = {
+  stdout: TestOutput
+  stderr: TestOutput
+  kill: (signal: 'SIGKILL') => boolean
+  send: (message: string) => boolean
+  on: {
+    (event: 'message', listener: (message: unknown) => void): void
+    (event: 'error', listener: (error: Error) => void): void
+    (event: 'close', listener: (code: number | null) => void): void
+  }
+}
+type SpawnTestProcess = (
+  executable: string,
+  args: string[],
+  options: {
+    cwd: string
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+  },
+) => TestChildProcess
 
 const planInput = (overrides: Partial<ConfigInput> = {}): ConfigInput => ({
   type: 'race',
@@ -18,6 +45,84 @@ const planInput = (overrides: Partial<ConfigInput> = {}): ConfigInput => ({
   tp: 3,
   ...overrides,
 })
+
+const BUILD_CFG_DEADLINE_MS = 1_500
+const CHILD_STARTUP_DEADLINE_MS = 5_000
+const buildCfgChildScript = `
+  import { createServer } from 'vite'
+
+  const server = await createServer({ logLevel: 'silent', server: { middlewareMode: true } })
+  const { buildCfg } = await server.ssrLoadModule('/src/features/plan/config.ts')
+  process.send('ready')
+
+  process.once('message', async (serializedInput) => {
+    try {
+      const config = buildCfg(JSON.parse(serializedInput))
+      process.stdout.write(JSON.stringify({ twIsNaN: Number.isNaN(config.tw) }))
+    } finally {
+      await server.close()
+      process.disconnect()
+    }
+  })
+`
+
+async function buildCfgReturnsNaN(input: ConfigInput): Promise<boolean> {
+  const { spawn } = await vi.importActual<{ spawn: SpawnTestProcess }>('node:child_process')
+  const runtimeProcess = (globalThis as typeof globalThis & { process: TestProcess }).process
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      runtimeProcess.execPath,
+      ['--input-type=module', '--eval', buildCfgChildScript],
+      {
+        cwd: runtimeProcess.cwd(),
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      },
+    )
+    let stdout = ''
+    let stderr = ''
+    let returnDeadline: ReturnType<typeof setTimeout> | undefined
+    const startupDeadline = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(
+        new Error(`buildCfg test process did not start within ${CHILD_STARTUP_DEADLINE_MS} ms`),
+      )
+    }, CHILD_STARTUP_DEADLINE_MS)
+
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk
+    })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk
+    })
+    child.on('message', (message) => {
+      if (message !== 'ready') return
+      clearTimeout(startupDeadline)
+      returnDeadline = setTimeout(() => {
+        child.kill('SIGKILL')
+        reject(new Error(`buildCfg did not return within ${BUILD_CFG_DEADLINE_MS} ms`))
+      }, BUILD_CFG_DEADLINE_MS)
+      child.send(JSON.stringify(input))
+    })
+    child.on('error', (error) => {
+      clearTimeout(startupDeadline)
+      clearTimeout(returnDeadline)
+      reject(error)
+    })
+    child.on('close', (code) => {
+      clearTimeout(startupDeadline)
+      clearTimeout(returnDeadline)
+      if (code !== 0) {
+        reject(new Error(stderr || `buildCfg subprocess exited with code ${code}`))
+        return
+      }
+
+      resolve(JSON.parse(stdout).twIsNaN)
+    })
+  })
+}
 
 describe('buildCfg', () => {
   it.each([
@@ -147,6 +252,14 @@ describe('buildCfg', () => {
   })
 
   describe('invalid input compatibility', () => {
+    it.each([
+      ['an invalid start date', { start: 'invalid' }],
+      ['an invalid race date', { race: 'invalid' }],
+      ["a race date outside JavaScript's supported range", { race: '275760-09-14' }],
+    ])('returns with tw NaN for %s (Taiga #256)', async (_case, overrides) => {
+      await expect(buildCfgReturnsNaN(planInput(overrides))).resolves.toBe(true)
+    })
+
     it('keeps the current unvalidated result when the race is before the start (Taiga #253)', () => {
       const config = buildCfg(planInput({ race: '2026-10-18' }))
 

@@ -41,6 +41,7 @@ function sameCalendarDay(left: Date, right: Date): boolean {
 function calendarWeekDifference(start: Date, end: Date): number {
   let cursor = mon(start)
   const target = mon(end)
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(target.getTime())) return Number.NaN
   const direction = cursor <= target ? 1 : -1
   let weeks = 0
 
