@@ -1,8 +1,12 @@
 # Unit tests for the pure Discord/Taiga helpers in moach_taiga.py.
 # No network, no environment variables, no dates.
 # Run: python3 -m unittest discover -s scripts -p 'test_*.py'
+import argparse
+import contextlib
 import importlib.util
 import io
+import os
+import sys
 import unittest
 import urllib.error
 from pathlib import Path
@@ -622,6 +626,292 @@ class TaigaCallErrorsTest(unittest.TestCase):
                 with self.assertRaises(SystemExit) as cm:
                     bare_taiga("geheim-token").call("GET", "/users/me")
             self.assertNotIn("geheim-token", exit_message(cm))
+
+
+# --- TG-216: welcome message with the "Ich will testen" button --------------------
+
+HANDLER_TS = (Path(__file__).resolve().parent.parent / "backend" / "supabase" / "functions"
+              / "discord-interactions" / "handler.ts")
+BOT_ID = "1561400000000000777"
+OTHER_AUTHOR_ID = "777000000000000456"
+WELCOME_CHANNEL_ID = "1561383271823315300"
+NEWS_CHANNEL_ID = "1561383271823315400"
+OLD_WELCOME_ID = "1561383271823315888"
+NEW_WELCOME_ID = "1561383271823316001"
+FAKE_BOT_TOKEN = "bot-geheim"
+OLD_SCREEN_DESCRIPTION = "Schreib dem Bot eine Direktnachricht, um Testläufer zu werden."
+
+
+def message(msg_id, author_id, content):
+    return {"id": msg_id, "author": {"id": author_id}, "content": content}
+
+
+class WelcomeConstantsTest(unittest.TestCase):
+    def test_join_id(self):
+        self.assertEqual(mt.TESTER_JOIN_ID, "moach_tester_join")
+
+    def test_join_id_matches_edge_function(self):
+        # The button id must be the same on both sides, otherwise clicks are rejected.
+        self.assertIn("'moach_tester_join'", HANDLER_TS.read_text(encoding="utf-8"))
+
+    def test_names(self):
+        self.assertEqual(mt.WELCOME_CHANNEL, "willkommen")
+        self.assertEqual(mt.WELCOME_HEADING, "# Willkommen bei M.oach")
+        self.assertEqual(mt.WELCOME_BUTTON_LABEL, "Ich will testen")
+
+
+class WelcomeTextsTest(unittest.TestCase):
+    def test_message_starts_with_heading(self):
+        self.assertTrue(mt.WELCOME_MESSAGE.startswith(mt.WELCOME_HEADING), mt.WELCOME_MESSAGE[:80])
+
+    def test_message_fits_discord_limit(self):
+        self.assertLessEqual(len(mt.WELCOME_MESSAGE), 2000)
+
+    def test_message_mentions_button(self):
+        self.assertIn("Ich will testen", mt.WELCOME_MESSAGE)
+
+    def test_message_without_direct_message_hint(self):
+        self.assertNotIn("direktnachricht", mt.WELCOME_MESSAGE.lower())
+
+    def test_message_links_app(self):
+        self.assertIn(mt.APP_URL, mt.WELCOME_MESSAGE)
+
+    def test_screen_description_fits_limit(self):
+        self.assertLessEqual(len(mt.WELCOME_SCREEN_DESCRIPTION), 140)
+
+    def test_screen_description_mentions_button(self):
+        self.assertIn("Ich will testen", mt.WELCOME_SCREEN_DESCRIPTION)
+
+    def test_screen_description_without_direct_message_hint(self):
+        self.assertNotIn("direktnachricht", mt.WELCOME_SCREEN_DESCRIPTION.lower())
+
+
+class WelcomePayloadTest(unittest.TestCase):
+    def test_exact_structure(self):
+        self.assertEqual(mt.welcome_payload(), {
+            "content": mt.WELCOME_MESSAGE,
+            "components": [{"type": 1, "components": [{
+                "type": 2, "style": 3, "label": "Ich will testen", "custom_id": "moach_tester_join",
+            }]}],
+            "allowed_mentions": {"parse": []},
+        })
+
+    def test_no_pings(self):
+        self.assertEqual(mt.welcome_payload()["allowed_mentions"]["parse"], [])
+
+    def test_fresh_dict_each_call(self):
+        first = mt.welcome_payload()
+        first["components"].clear()
+        self.assertEqual(len(mt.welcome_payload()["components"]), 1)
+
+
+class FindWelcomeMessageTest(unittest.TestCase):
+    def test_finds_bot_message(self):
+        own = message(OLD_WELCOME_ID, BOT_ID, mt.WELCOME_HEADING + "\nAlter Text")
+        messages = [message("3", OTHER_AUTHOR_ID, "Hallo zusammen"), own]
+        self.assertEqual(mt.find_welcome_message(messages, BOT_ID), own)
+
+    def test_ignores_same_text_from_other_author(self):
+        messages = [message("3", OTHER_AUTHOR_ID, mt.WELCOME_MESSAGE)]
+        self.assertIsNone(mt.find_welcome_message(messages, BOT_ID))
+
+    def test_ignores_other_bot_messages(self):
+        messages = [message("3", BOT_ID, "🎉 **Wochenlast**\nNeu im Plan.")]
+        self.assertIsNone(mt.find_welcome_message(messages, BOT_ID))
+
+    def test_empty_list(self):
+        self.assertIsNone(mt.find_welcome_message([], BOT_ID))
+
+    def test_first_of_several(self):
+        newest = message("5", BOT_ID, mt.WELCOME_HEADING + "\nNeu")
+        older = message("4", BOT_ID, mt.WELCOME_HEADING + "\nAlt")
+        self.assertEqual(mt.find_welcome_message([newest, older], BOT_ID), newest)
+
+
+class WelcomeScreenPatchTest(unittest.TestCase):
+    def test_none_needs_patch(self):
+        self.assertEqual(mt.welcome_screen_patch(None), {"description": mt.WELCOME_SCREEN_DESCRIPTION})
+
+    def test_old_description_needs_patch(self):
+        current = {"description": OLD_SCREEN_DESCRIPTION, "welcome_channels": []}
+        self.assertEqual(mt.welcome_screen_patch(current), {"description": mt.WELCOME_SCREEN_DESCRIPTION})
+
+    def test_current_description_no_patch(self):
+        current = {"description": mt.WELCOME_SCREEN_DESCRIPTION, "welcome_channels": []}
+        self.assertIsNone(mt.welcome_screen_patch(current))
+
+
+class FakeDiscord:
+    """Answers discord_call by method and path and records every call."""
+
+    def __init__(self, messages=(), screen=None, channels=None):
+        self.messages = list(messages)
+        self.screen = screen
+        self.channels = channels if channels is not None else [
+            {"id": NEWS_CHANNEL_ID, "name": "neuigkeiten", "type": 0},
+            {"id": WELCOME_CHANNEL_ID, "name": "willkommen", "type": 0},
+            {"id": BUGS_CHANNEL_ID, "name": "bugs", "type": 15},
+        ]
+        self.calls = []
+
+    def __call__(self, method, path, body=None, token=None, allow_404=False):
+        self.calls.append({"method": method, "path": path, "body": body, "token": token,
+                           "allow_404": allow_404})
+        guild = mt.DISCORD_GUILD_ID
+        base = path.split("?")[0]
+        if method == "GET" and base == "/users/@me":
+            return {"id": BOT_ID, "username": "M.oach", "bot": True}
+        if method == "GET" and base == f"/guilds/{guild}/channels":
+            return self.channels
+        if method == "GET" and base == f"/channels/{WELCOME_CHANNEL_ID}/messages":
+            return self.messages
+        if method == "GET" and base == f"/guilds/{guild}/welcome-screen":
+            return self.screen
+        if method == "POST" and base == f"/channels/{WELCOME_CHANNEL_ID}/messages":
+            return {"id": NEW_WELCOME_ID, "author": {"id": BOT_ID}, **body}
+        if method == "PATCH" and base.startswith(f"/channels/{WELCOME_CHANNEL_ID}/messages/"):
+            return {"id": base.rsplit("/", 1)[1], "author": {"id": BOT_ID}, **body}
+        if method == "PUT" and base.startswith(f"/channels/{WELCOME_CHANNEL_ID}/pins/"):
+            return {}
+        if method == "PATCH" and base == f"/guilds/{guild}/welcome-screen":
+            return {"welcome_channels": [], **body}
+        raise AssertionError(f"unexpected Discord call: {method} {path}")
+
+    def writes(self):
+        return [(c["method"], c["path"]) for c in self.calls if c["method"] != "GET"]
+
+
+def old_welcome():
+    return message(OLD_WELCOME_ID, BOT_ID, mt.WELCOME_HEADING + "\nSchreib dem Bot eine Direktnachricht.")
+
+
+def current_screen():
+    return {"description": mt.WELCOME_SCREEN_DESCRIPTION, "welcome_channels": []}
+
+
+class DiscordWelcomeCommandTest(unittest.TestCase):
+    def run_welcome(self, fake, dry_run=False, token=FAKE_BOT_TOKEN):
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"DISCORD_BOT_TOKEN": token}), \
+                mock.patch.object(mt, "discord_call", side_effect=fake), \
+                contextlib.redirect_stdout(out):
+            mt.cmd_discord_welcome(None, argparse.Namespace(dry_run=dry_run))
+        return out.getvalue()
+
+    def test_without_token_skips(self):
+        fake = FakeDiscord()
+        for token in (None, "", "   "):
+            out = io.StringIO()
+            with mock.patch.dict(os.environ), \
+                    mock.patch.object(mt, "discord_call", side_effect=fake), \
+                    contextlib.redirect_stdout(out):
+                os.environ.pop("DISCORD_BOT_TOKEN", None)
+                if token is not None:
+                    os.environ["DISCORD_BOT_TOKEN"] = token
+                mt.cmd_discord_welcome(None, argparse.Namespace(dry_run=False))
+            self.assertIn("übersprungen", out.getvalue(), repr(token))
+        self.assertEqual(fake.calls, [])
+
+    def test_existing_message_is_edited(self):
+        fake = FakeDiscord(messages=[message("9", OTHER_AUTHOR_ID, "Hi"), old_welcome()],
+                           screen={"description": OLD_SCREEN_DESCRIPTION, "welcome_channels": []})
+        self.run_welcome(fake)
+        edits = [c for c in fake.calls if c["method"] == "PATCH"
+                 and c["path"] == f"/channels/{WELCOME_CHANNEL_ID}/messages/{OLD_WELCOME_ID}"]
+        self.assertEqual(len(edits), 1)
+        self.assertEqual(edits[0]["body"], mt.welcome_payload())
+        self.assertNotIn("POST", [c["method"] for c in fake.calls])
+        self.assertNotIn("PUT", [c["method"] for c in fake.calls])
+
+    def test_old_screen_description_is_patched(self):
+        fake = FakeDiscord(messages=[old_welcome()],
+                           screen={"description": OLD_SCREEN_DESCRIPTION, "welcome_channels": []})
+        self.run_welcome(fake)
+        patches = [c for c in fake.calls
+                   if c["method"] == "PATCH" and c["path"] == f"/guilds/{mt.DISCORD_GUILD_ID}/welcome-screen"]
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0]["body"], {"description": mt.WELCOME_SCREEN_DESCRIPTION})
+
+    def test_missing_screen_is_patched(self):
+        fake = FakeDiscord(messages=[old_welcome()], screen=None)
+        self.run_welcome(fake)
+        self.assertIn(("PATCH", f"/guilds/{mt.DISCORD_GUILD_ID}/welcome-screen"), fake.writes())
+
+    def test_welcome_screen_read_allows_404(self):
+        fake = FakeDiscord(messages=[old_welcome()], screen=current_screen())
+        self.run_welcome(fake)
+        reads = [c for c in fake.calls
+                 if c["method"] == "GET" and c["path"] == f"/guilds/{mt.DISCORD_GUILD_ID}/welcome-screen"]
+        self.assertEqual(len(reads), 1)
+        self.assertTrue(reads[0]["allow_404"])
+
+    def test_no_message_posts_and_pins(self):
+        fake = FakeDiscord(messages=[message("9", OTHER_AUTHOR_ID, mt.WELCOME_MESSAGE)],
+                           screen=current_screen())
+        self.run_welcome(fake)
+        self.assertEqual(fake.writes(), [
+            ("POST", f"/channels/{WELCOME_CHANNEL_ID}/messages"),
+            ("PUT", f"/channels/{WELCOME_CHANNEL_ID}/pins/{NEW_WELCOME_ID}"),
+        ])
+        post = next(c for c in fake.calls if c["method"] == "POST")
+        self.assertEqual(post["body"], mt.welcome_payload())
+
+    def test_current_screen_not_patched(self):
+        fake = FakeDiscord(messages=[old_welcome()], screen=current_screen())
+        self.run_welcome(fake)
+        self.assertNotIn(("PATCH", f"/guilds/{mt.DISCORD_GUILD_ID}/welcome-screen"), fake.writes())
+
+    def test_reads_recent_messages_of_welcome_channel(self):
+        fake = FakeDiscord(messages=[old_welcome()], screen=current_screen())
+        self.run_welcome(fake)
+        gets = [c["path"] for c in fake.calls if c["method"] == "GET"]
+        self.assertIn("/users/@me", gets)
+        self.assertIn(f"/guilds/{mt.DISCORD_GUILD_ID}/channels", gets)
+        self.assertIn(f"/channels/{WELCOME_CHANNEL_ID}/messages?limit=50", gets)
+
+    def test_all_calls_use_bot_token(self):
+        fake = FakeDiscord(messages=[], screen=None)
+        self.run_welcome(fake)
+        self.assertTrue(fake.calls)
+        self.assertEqual({c["token"] for c in fake.calls}, {FAKE_BOT_TOKEN})
+
+    def test_dry_run_only_reads(self):
+        for messages, screen in (([], None), ([old_welcome()], {"description": OLD_SCREEN_DESCRIPTION})):
+            fake = FakeDiscord(messages=messages, screen=screen)
+            out = self.run_welcome(fake, dry_run=True)
+            self.assertEqual(fake.writes(), [])
+            self.assertTrue(fake.calls)
+            self.assertNotEqual(out.strip(), "")
+
+    def test_missing_channel_exits(self):
+        fake = FakeDiscord(channels=[{"id": NEWS_CHANNEL_ID, "name": "neuigkeiten", "type": 0}])
+        with self.assertRaises(SystemExit) as cm:
+            self.run_welcome(fake)
+        self.assertNotIn(FAKE_BOT_TOKEN, exit_message(cm))
+        self.assertEqual(fake.writes(), [])
+
+    def test_output_never_contains_token(self):
+        scenarios = (
+            (dict(messages=[old_welcome()], screen={"description": OLD_SCREEN_DESCRIPTION}), False),
+            (dict(messages=[], screen=None), False),
+            (dict(messages=[old_welcome()], screen=current_screen()), False),
+            (dict(messages=[], screen=None), True),
+        )
+        for kwargs, dry_run in scenarios:
+            out = self.run_welcome(FakeDiscord(**kwargs), dry_run=dry_run)
+            self.assertNotIn(FAKE_BOT_TOKEN, out)
+
+
+class DiscordWelcomeCliTest(unittest.TestCase):
+    def test_runs_without_taiga(self):
+        argv = ["moach_taiga.py", "discord-welcome", "--dry-run"]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(mt, "Taiga", side_effect=AssertionError("Taiga not needed")), \
+                mock.patch.object(mt, "detect_slug", side_effect=AssertionError("Taiga not needed")), \
+                mock.patch.object(mt, "cmd_discord_welcome") as cmd:
+            mt.main()
+        cmd.assert_called_once()
+        self.assertTrue(cmd.call_args.args[1].dry_run)
 
 
 if __name__ == "__main__":

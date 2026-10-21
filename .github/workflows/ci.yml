@@ -25,6 +25,25 @@ jobs:
       - name: Script unit tests
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/supabase/functions/discord-interactions
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Format
+        run: deno fmt --check
+      - name: Lint
+        run: deno lint
+      - name: Type check
+        run: deno check index.ts handler.ts
+      - name: Unit tests
+        run: deno test --no-prompt
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

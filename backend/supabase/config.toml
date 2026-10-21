@@ -386,6 +386,10 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Discord sends no Supabase JWT. Requests are authenticated by their Ed25519 signature instead.
+[functions.discord-interactions]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 55327

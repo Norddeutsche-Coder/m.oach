@@ -5,7 +5,8 @@ import { createLifecycle } from '../lib/lifecycle'
 import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
-import { longRunHint, taperLongRunLimit } from '../features/plan/wizard'
+import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
+import { longRunHint } from '../features/plan/wizard'
 import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
@@ -44,11 +45,11 @@ const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate
 const wtr=d=>Math.round((mon(parse(S.race))-mon(d))/(7*D));
 const LEG={tw:49,T:[48,38,30,21,17],S:13,A:[[49,15],[48,35],[47,50],[40,70],[37,66],[29,78],[22,90],[21,86],[20,70],[16,90],[5,120],[3,96],[2,72],[1,50],[0,45]],cap:34,ls:.285,tl:[14,18,24],roles:['rest','q1','easy','q2','str','easy','long'],W:[0,.21,.24,.22,.16,.17,0],strD:[2,4],test:21,recov:20,first:49,fw:[2,4],mul:false};
 const CF=()=>S.cfg||LEG;
-const TPW=()=>{const C=CF();return C.tp==null?4:C.tv>=2?C.tp:C.tp+1};
+const TPW=()=>taperWeeks(CF());
 const RD=()=>S.rd||42.195,GT=()=>S.goalT||S.goal,rpace=()=>GT()/RD();
 const RN=()=>{const k=RD();return k>=40?'MARATHON':k>=20?'HALBMARATHON':Math.round(k)+' KM'};
-const ph=w=>{const C=CF(),T=C.T;if(C.mode=='maintain')return'Erhaltung';return w>=T[0]?'Regeneration':w>=T[1]?'Grundlagen':w>=T[2]?'Tempoentwicklung':w>=T[3]?'Schwelle & Test':w>=T[4]?'Entlastung + Basis':w>=TPW()?(RD()<30?'Wettkampfspezifisch':'Marathonspezifisch'):'Tapering'};
-function vol(w){const A=CF().A;if(w>=A[0][0])return A[0][1];if(w<=0)return A[A.length-1][1];for(let i=0;i<A.length-1;i++){const[a,x]=A[i],[b,y]=A[i+1];if(w<=a&&w>=b)return a==b?x:y+(x-y)*(w-b)/(a-b)}return A[A.length-1][1]}
+const ph=w=>phase(CF(),w,RD());
+const vol=w=>volume(CF(),w);
 const gp=()=>S.goal/42.195;
 const WF=d=>{const a=S.wkadj;return a&&a[iso(mon(d))]||1};
 const paceSchedule=()=>({baseSeconds:S.base,goalSeconds:S.goal,start:iso(START),race:S.race});
@@ -155,7 +156,6 @@ function tuneOv(d,p){
    return p}}
  return p}
 function planCur(d,na){const p=planCore(d,na),T=S.tune;let q=p;if(p&&T&&T.length&&iso(d)!=S.race&&p.lab!=RN())q=tuneOv(d,p);const q2=repOv(d,q);if(q2&&q2.str&&wtr(d)<1)return Object.assign({},q2,{str:''});if(q2&&q2.str){const m=krMeta(d);return Object.assign({},q2,{kr:m.s,krs:m.n,str:'Krafttraining nach dem Lauf, Einheit '+m.s+' ('+KSD[m.s]+'), 20–25 min'})}return q2}
-const TP={0:{f:[],tl:[]},1:{f:[.6],tl:[.55]},2:{f:[.5,.7],tl:[.45,.65]},3:{f:[.42,.6,.8],tl:[.41,.53,.71]},4:{f:[.42,.57,.72,.85],tl:[.41,.53,.71,.8]}};
 const defTaper=rd=>rd>40?3:rd>20?2:1;
 const tuneLimit=(race)=>iso(addD(parse(race),-14));
 const tuneSort=L=>L.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
@@ -447,7 +447,7 @@ function rSet(){
 /* ===== M.oach: Startseite / Tagesbriefing ===== */
 const DOW=['Mo','Di','Mi','Do','Fr','Sa','So'];
 const LV=[{t:'Bereit',c:'s-g'},{t:'Anpassen',c:'s-y'},{t:'Erholen',c:'s-r'}];
-const deload=w=>{const C=CF();if(C.mode=='maintain')return(C.tw-w)%4==3;return w>TPW()+1&&w<C.T[0]&&w!=C.test&&w!=C.recov&&(C.tw-w)%4==3};
+const deload=w=>isDeload(CF(),w);
 const FOCUS={'Erhaltung':'Fitness halten: gleichbleibender Umfang, ein bis zwei Tempoeinheiten, alle 4 Wochen eine leichtere Woche.','Wettkampfspezifisch':'Renntempo automatisieren: Intervalle und Abschnitte im Zieltempo, dazu lange Läufe für die Grundlage.','Regeneration':'Körper erholen lassen: kein Tempo, nur locker. Ziel ist, gesund und frisch in den Aufbau zu starten.','Grundlagen':'Aerobe Basis: viel locker laufen, Umfang um 5–8 % pro Woche steigern, 2× Kraft zu Hause.','Tempoentwicklung':'Schnelligkeit und Laufökonomie: kurze Intervalle, Hügelsprints, saubere Technik.','Schwelle & Test':'Schwellentempo stabil halten. Der Testlauf zeigt, ob 2:45 realistisch ist.','Entlastung + Basis':'Nach dem Test kurz erholen, dann den Umfang wieder aufbauen.','Marathonspezifisch':'Marathontempo automatisieren: lange Läufe mit Tempoanteil, Verpflegung üben.','Tapering':'Umfang runter, Frische hoch. Nichts Neues mehr ausprobieren.'};
 const strip=p=>p.d.replace(/^[\d.,]+ km( gesamt)?:? ?/,'');
 const XG='<line class="xg" x1="4" x2="116" y1="84" y2="84"/>';
@@ -1797,28 +1797,7 @@ function showAuth(info){
 const WDL=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
 const DISTS=[[42.195,'Marathon'],[21.0975,'Halbmarathon'],[10,'10 km'],[5,'5 km']];
 const clampN=(x,l,h)=>Math.max(l,Math.min(h,x));
-function buildCfg(a){
- const N=clampN(Math.round(+a.tp)||3,1,4),mt=a.type=='maintain',sd=parse(a.start),ed=mt?addD(mon(sd),a.weeks*7-1):parse(a.race);
- const tw=Math.round((mon(ed)-mon(sd))/(7*D));
- const rest=a.rest,lg=a.lg,roles=Array(7).fill('rest');
- for(let i=0;i<7;i++)if(!rest.includes(i))roles[i]='easy';
- roles[lg]='long';
- const seq=[];for(let k=1;k<7;k++){const d=(lg+k)%7;if(roles[d]!='rest')seq.push({d,k})}
- let sdy=null;
- if(seq.length>=3){sdy=seq.find(x=>x.k==5)||seq[seq.length-1];roles[sdy.d]='str'}
- const cand=seq.filter(x=>x.k!=1&&(!sdy||x.d!=sdy.d));
- const q1=cand[0];if(q1){roles[q1.d]='q1';const q2=cand.find(x=>x.k>=q1.k+2);if(q2)roles[q2.d]='q2'}
- if(mt){const i2=roles.indexOf('q2');if(a.q<2&&i2>=0)roles[i2]='easy';const i1=roles.indexOf('q1');if(a.q<1&&i1>=0)roles[i1]='easy'}
- const raw={easy:.19,str:.16,q1:.22,q2:.22},W=roles.map(r=>raw[r]||0),sm=W.reduce((x,y)=>x+y,0)||1;
- const strD=seq.filter(x=>x.k!=1&&(roles[x.d]=='easy'||roles[x.d]=='str')).slice(0,a.str).map(x=>x.d);
- const cap=a.cap,tl=TP[N-1].tl.map(f=>Math.min(Math.round(cap*f),taperLongRunLimit(a.peak,cap))),Wn=W.map(x=>x/sm);
- if(mt)return{tw,T:[tw+1,0,0,0,0],S:0,A:[[tw,a.cur]],cap,ls:clampN(cap/a.cur,.25,.4),tl,roles,W:Wn,strD,test:-1,recov:-1,first:999,fw:[],mul:false,mode:'maintain'};
- let S0=clampN(Math.round(tw*.265),6,13),T4=N+S0,T3=T4+4,n=tw-T3+1;
- const test=tw>=24&&n>=8;let T,Sx;
- if(test){const m=n-1,g=Math.round(m*.36),t=Math.round(m*.30),T1=tw-g+1,T2=T1-t;T=[tw+1,T1,T2,T3,T4];Sx=S0}
- else{Sx=clampN(Math.round(tw*.5),4,13);const e=N+Sx;T=[tw+1,e,e,e,e]}
- const p=a.peak,A=[[Math.max(tw,N+1),a.cur],[N,p]].concat(Array.from({length:N-1},(_,i)=>[N-1-i,Math.round(p*TP[N-1].f[N-2-i])]),[[0,Math.round(p*.375)]]);
- return{tw,T,S:Sx,A,cap,ls:clampN(cap/p,.25,.4),tl,roles,W:Wn,strD,test:test?T3:-1,recov:test?T3-1:-1,first:999,fw:[],mul:true,tp:N,tv:2}}
+const buildCfg=a=>buildPlanConfig(a);
 function withPlan(tmp,fn){
  const K=['race','goal','goalT','rd','base','start','cfg','noPlan','tune'],o={};K.forEach(k=>o[k]=S[k]);o.st=START;
  S.race=tmp.race;S.goal=tmp.goal;S.goalT=tmp.goalT||null;S.rd=tmp.rd||42.195;S.base=tmp.base;S.start=tmp.start;S.cfg=tmp.cfg||null;S.tune=tmp.tune||null;S.noPlan=false;START=parse(tmp.start||'2026-10-12');
