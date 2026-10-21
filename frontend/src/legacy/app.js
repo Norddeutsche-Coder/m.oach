@@ -6,7 +6,7 @@ import { iso, parse, addD, mon, fp, ft } from '../lib/format'
 import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
 import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
-import { longRunHint } from '../features/plan/wizard'
+import { expectedPace, longRunHint } from '../features/plan/wizard'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
 
@@ -52,7 +52,7 @@ const vol=w=>volume(CF(),w);
 const gp=()=>S.goal/42.195;
 const WF=d=>{const a=S.wkadj;return a&&a[iso(mon(d))]||1};
 function calDays(a,b){const end=iso(b),start=iso(a);if(start==end)return 0;const step=start<end?1:-1;let n=0,d=parse(start);while(iso(d)!=end){d=addD(d,step);n+=step}return n}
-function expP(d){const b=S.base/42.195,e=addD(mon(parse(S.race)),-35),f=Math.max(0,Math.min(1,calDays(START,d)/calDays(START,e)));return b+(gp()-b)*f}
+function expP(d){const b=S.base/42.195,e=addD(mon(parse(S.race)),-35);return expectedPace(b,gp(),calDays(START,d),calDays(START,e))}
 function fitP(){let b=null;for(const r of S.res){const p=r.sec*Math.pow(42.195/r.km,1.06)/42.195;if(!b||r.d>=b.d)b={d:r.d,p,r}}return b}
 function Z(d){const f=fitP();let P=f?f.p:expP(d);P=Math.max(P,gp());return{mp:P,e1:P*1.16,e2:P*1.3,t:P*.945,i:P*.91,r:P*.87}}
 let AD={f:1,msg:'Noch zu wenig Daten – trage deine Läufe ein, dann passt sich der Plan an.'};
