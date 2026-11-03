@@ -9,7 +9,7 @@ effort: medium
 
 # Taiga-Story abschließen
 
-> Gemeinsame Regeln: `docs/workflow.md` (zu Beginn lesen). Helfer: `python3 -I scripts/moach_taiga.py <befehl>`. Live-URL: `https://norddeutsche-coder.github.io/m.oach/`, Deploy-Workflow `Deploy`.
+> Gemeinsame Regeln: `docs/workflow.md` (zu Beginn lesen). Helfer: `python3 -I scripts/moach_taiga.py <befehl>`. Live-URL: `https://m-oach.com/`, Deploy-Workflow `Deploy`.
 
 Argument: Nummer der **User Story**. Fehlt sie, frag danach. **Steht die Story noch auf `Abnahme`** (alter Ablauf), setz sie auf `Fertig` mit Kommentar `Abnahme entfällt, auf Fertig gesetzt.`, dann `sort-sprint`, und hör auf.
 
@@ -49,7 +49,7 @@ Zeig die Ausgabe von `finish-check`, `git diff --stat origin/main...origin/<bran
    - Bei `Epic … ankündigen: ja`: einen Text nach `epic_news_text` vorschlagen („Kurz gesagt“, nur der Nutzen für Läufer, ohne Fachbegriffe).
    - Bei `Bug: ja`: einen Text nach `bug_news_text` vorschlagen (`Behoben: …`).
    - Den Text in eine Datei unter `<tmp>` schreiben und `discord-news <datei>` ausführen. Die Ausgabe ist der Link zur Nachricht.
-   - Bei `Discord-Beitrag: <link>` danach `discord-bug-fixed <link> <news-link>` ausführen. Wurde `discord-news` übersprungen oder nichts gepostet, nimm als `<news-link>` die App-URL `https://norddeutsche-coder.github.io/m.oach/`.
+   - Bei `Discord-Beitrag: <link>` danach `discord-bug-fixed <link> <news-link>` ausführen. Wurde `discord-news` übersprungen oder nichts gepostet, nimm als `<news-link>` die App-URL `https://m-oach.com/`.
    - Sonst nichts posten. Rein technische Stories posten nie. Keine Erwähnungen. Meldet ein Befehl `übersprungen: …`, weil eine Variable fehlt, weitermachen und es im Abschlussbericht nennen.
 5. Aufräumen: Remote-Branch löschen, falls noch da, lokal `git switch main && git pull --ff-only && git branch -d <branch>` (bei Weigerung fragen).
 
