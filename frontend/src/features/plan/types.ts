@@ -111,6 +111,68 @@ export interface Prognosis {
   r: PaceRun
 }
 
+/** Kind of a planned training day. */
+export type PlanDayType = 'rest' | 'easy' | 'q' | 'long' | 'race'
+
+/** One planned training day: type, label, distance in km, description and optional strength text. */
+export interface PlanDay {
+  t: PlanDayType
+  lab: string
+  km: number
+  d: string
+  str?: string
+}
+
+/** Part of the plan configuration a maintenance plan needs. */
+export type MaintenanceConfig = Pick<PlanConfig, 'roles' | 'A' | 'strD' | 'ls' | 'cap' | 'W'>
+
+/** Plan start, zones of the day and volume factors (week adjustment, 14-day adaptation). */
+export interface MaintenanceContext {
+  start: Date
+  zones: PaceZones
+  weekFactor: number
+  adaptationFactor: number
+}
+
+/** A tune-up race inside a plan. */
+export interface TuneRace {
+  id: string
+  d: string
+  km: number
+  m: string
+  n: string
+}
+
+/** Plan fields of an archived or temporarily applied plan. */
+export interface PlanSegmentInput {
+  start: string
+  race: string
+  goal: number
+  goalT?: number | null
+  rd?: number
+  base: number
+  cfg?: PlanConfig | null
+  tune?: readonly TuneRace[] | null
+}
+
+/** An archived plan, valid from `start` to `until` (both inclusive ISO dates). */
+export interface PlanSegment extends PlanSegmentInput {
+  until: string
+}
+
+/** Plan fields of the app state. */
+export interface PlanFields {
+  race: string
+  goal: number
+  goalT?: number | null
+  rd?: number
+  base: number
+  start?: string | null
+  cfg?: PlanConfig | null
+  noPlan?: boolean
+  tune?: readonly TuneRace[] | null
+}
+
 /** Strength weekdays (Monday = 0), plan start and race day as ISO dates. */
 export interface StrengthSchedule {
   strD: readonly number[]

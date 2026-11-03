@@ -18,8 +18,8 @@ export default defineConfig({
         'src/test/**',
       ],
       thresholds: {
-        lines: 50,
-        functions: 37,
+        lines: 52,
+        functions: 39,
         'src/features/plan/**': {
           lines: 90,
           perFile: true,
