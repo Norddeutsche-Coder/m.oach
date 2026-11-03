@@ -7,6 +7,8 @@ import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
 import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
 import { longRunHint } from '../features/plan/wizard'
+import { planM as maintenanceDay } from '../features/plan/maintenance'
+import { histSeg as historySegment, withPlan as withPlanState } from '../features/plan/history'
 import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
@@ -64,27 +66,14 @@ function calcAd(){let pl=0,ac=0,rs=[],n=0;AD={f:1,msg:AD.msg};
  if(rp>=8)AD={f:.85,msg:`Hohe Belastung (RPE Ø ${rp.toFixed(1)}) → Umfang der nächsten 14 Tage −15 %.`};
  else if(c<.8)AD={f:.9,msg:`Nur ${Math.round(c*100)} % des Plan-Umfangs der letzten 14 Tage geschafft → nächste 14 Tage −10 %.`};
  else AD={f:1,msg:`Plan wird gut umgesetzt (${Math.round(c*100)} % Umfang) – keine Anpassung nötig.`}}
-function histSeg(d){const k=iso(d),H=S.hist||[];for(let i=H.length-1;i>=0;i--)if(H[i].start<=k&&k<=H[i].until)return H[i];return null}
+function histSeg(d){return historySegment(S.hist,d)}
 function plan(d,na){
  if(S.noPlan||d<START){const g=histSeg(d);return g?withPlan(g,()=>planCur(d,1)):null}
  const sr=S.mv&&S.mv[iso(d)];
  if(sr&&sr!==iso(d)){const q=planCur(parse(sr),na);if(q)return Object.assign({},q,{mv:sr})}
  return planCur(d,na)}
 function planM(d,na,C){
- const dw=(d.getDay()+6)%7,ro=C.roles[dw],z=Z(d),r=fp,wk=Math.round((mon(d)-mon(START))/(7*D)),dl=wk%4==3;
- let V=C.A[0][1];if(dl)V*=.8;V*=WF(d);if(!na&&d>=today&&d<=addD(today,13))V*=AD.f;
- const str=C.strD.includes(dw)?'Kraft zu Hause 20–25 min: einbeinige Kniebeuge, Hip Thrust, Wadenheben, Plank':'';
- const easy=(k,x)=>({t:'easy',lab:'Locker',km:k,str,d:`${k} km locker @ ${r(z.e1)}–${r(z.e2)} /km${x||''}`});
- if(ro=='rest')return{t:'rest',lab:'Recovery',km:0,d:'Ruhetag. Optional 15 min Mobility.'};
- const L=Math.min(C.cap,Math.round(V*C.ls)),km=ro=='long'?L:Math.round(Math.max(0,V-L)*C.W[dw]);
- if(ro=='easy')return easy(km);
- if(ro=='str')return easy(km,' + 6 × 20 s Steigerungsläufe');
- if(ro=='q1'||ro=='q2'){
-  if(dl)return easy(km);
-  const Q=(l,k,t)=>({t:'q',lab:l,km:k,str,d:`${k} km gesamt: ${t}`}),v=wk%3;
-  if(ro=='q1')return v==0?Q('Fahrtspiel',km,`6 × 2 min zügig (${r(z.t)}), je 2 min locker`):v==1?Q('Tempo',km,`20 min @ ${r(z.t)} (Schwelle) im Lauf`):Q('Hügel',km,'locker, davon 6 × 60 s bergauf kräftig (Trabpause)');
-  return v==0?Q('Intervalle',km,`Einlaufen + 5 × 800 m @ ${r(z.i)} (90 s Pause)`):v==1?Q('Schwelle',km,`3 × 8 min @ ${r(z.t)} (2 min Pause)`):Q('Tempo',km,`15 min @ ${r(z.t)} im Lauf`)}
- return{t:'long',lab:'Longrun',km:L,d:`${L} km @ ${r(z.e1)}–${r(z.e2)}`}}
+ return maintenanceDay(d,C,{start:START,zones:Z(d),weekFactor:WF(d),adaptationFactor:!na&&d>=today&&d<=addD(today,13)?AD.f:1})}
 function planCore(d,na){
  if(d<START)return null;const rd=parse(S.race);if(d>rd)return null;
  const C=CF(),T=C.T;
@@ -1799,9 +1788,8 @@ const DISTS=[[42.195,'Marathon'],[21.0975,'Halbmarathon'],[10,'10 km'],[5,'5 km'
 const clampN=(x,l,h)=>Math.max(l,Math.min(h,x));
 const buildCfg=a=>buildPlanConfig(a);
 function withPlan(tmp,fn){
- const K=['race','goal','goalT','rd','base','start','cfg','noPlan','tune'],o={};K.forEach(k=>o[k]=S[k]);o.st=START;
- S.race=tmp.race;S.goal=tmp.goal;S.goalT=tmp.goalT||null;S.rd=tmp.rd||42.195;S.base=tmp.base;S.start=tmp.start;S.cfg=tmp.cfg||null;S.tune=tmp.tune||null;S.noPlan=false;START=parse(tmp.start||'2026-10-12');
- try{return fn()}finally{K.forEach(k=>S[k]=o[k]);START=o.st}}
+ const o=S,st=START;
+ return withPlanState(S,tmp,(s,start)=>{S=s;START=start;try{return fn()}finally{S=o;START=st}})}
 function wzState(a){
  const mt=a.type=='maintain',cfg=buildCfg(a),base=Math.round(((+a.rh)*3600+(+a.rm)*60+(+a.rs))*Math.pow(42.195/a.rk,1.06));
  const tn=r=>{const L=(a.tune||[]).filter(t=>t.d>=a.start&&t.d<=tuneLimit(r)).map(t=>Object.assign({},t));return L.length?tuneSort(L):null};
