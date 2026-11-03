@@ -123,3 +123,46 @@ export interface StrengthMeta {
   s: 'A' | 'B'
   n: 2 | 3
 }
+
+/** Planned session of one day; `str` is the strength hint of easy and quality days. */
+export interface DayPlan {
+  t: 'rest' | 'easy' | 'q' | 'long' | 'race'
+  lab: string
+  km: number
+  str?: string
+  d: string
+}
+
+/** Everything the daily plan of a race plan needs; `today` anchors the adaptation window. */
+export interface DailyPlanInput {
+  date: Date
+  today: Date
+  start: Date
+  race: string
+  config: PlanConfig
+  raceDistance: number
+  /** Marathon goal time in seconds. */
+  goal: number
+  /** Goal time in seconds for the race distance. */
+  goalTime: number
+  zones: PaceZones
+  /** Manual volume factor of the week. */
+  weekFactor: number
+  /** Load-based volume factor for the days today … today + 13. */
+  adaptationFactor: number
+  withoutAdaptation: boolean
+}
+
+/** Values shared by the building blocks of one training day. */
+export interface DayContext {
+  config: PlanConfig
+  weeksToRace: number
+  zones: PaceZones
+  raceDistance: number
+  goal: number
+  goalTime: number
+  /** Weekly volume in km after all factors. */
+  volume: number
+  /** Strength hint of the day, empty if none. */
+  strength: string
+}

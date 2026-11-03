@@ -8,6 +8,7 @@ import { adjust } from '../features/today/adjustment'
 import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
 import { longRunHint } from '../features/plan/wizard'
 import { strengthSession } from '../features/plan/strength'
+import { dailyPlan } from '../features/plan/daily'
 import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
@@ -87,44 +88,9 @@ function planM(d,na,C){
   return v==0?Q('Intervalle',km,`Einlaufen + 5 × 800 m @ ${r(z.i)} (90 s Pause)`):v==1?Q('Schwelle',km,`3 × 8 min @ ${r(z.t)} (2 min Pause)`):Q('Tempo',km,`15 min @ ${r(z.t)} im Lauf`)}
  return{t:'long',lab:'Longrun',km:L,d:`${L} km @ ${r(z.e1)}–${r(z.e2)}`}}
 function planCore(d,na){
- if(d<START)return null;const rd=parse(S.race);if(d>rd)return null;
- const C=CF(),T=C.T;
- if(C.mode=='maintain')return planM(d,na,C);
- const role=C.roles,w=wtr(d),dw=(d.getDay()+6)%7,z=Z(d),r=fp,ro=role[dw],K=RD(),short=K<30,N=TPW()-1;
- if(iso(d)==S.race)return{t:'race',lab:RN(),km:K>=40?42.2:r1(K),d:K>=40?`Renntag! Ziel ${ft(S.goal)} (${r(gp())}/km). Erste 10 km kontrolliert bei ca. ${r(gp()*1.02)}/km.`:`Renntag! Ziel ${ft(GT())} (${r(rpace())}/km). ${K>=20?'Erste 3 km kontrolliert bei ca. '+r(rpace()*1.02)+'/km.':'Erste 1–2 km nicht schneller als Zielpace, ab Km 3 dranbleiben.'}`};
- let V=vol(w);if(C.mul){if(w==C.test)V*=.95;else if(w==C.recov)V*=.78}
- if(deload(w))V*=.78;
- V*=WF(d);
- if(!na&&d>=today&&d<=addD(today,13))V*=AD.f;
- const rest={t:'rest',lab:'Recovery',km:0,d:'Ruhetag. Optional 15 min Mobility.'};
- const str=C.strD.includes(dw)&&w<T[0]?'Kraft zu Hause 20–25 min: einbeinige Kniebeuge, Hip Thrust, Wadenheben, Plank':'';
- const easy=(k,x)=>({t:'easy',lab:'Locker',km:k,str,d:`${k} km locker @ ${r(z.e1)}–${r(z.e2)} /km${x||''}${V>=100&&k>=14?' · Doppeleinheit möglich (AM/PM)':''}`});
- if(ro=='rest')return rest;
- if(w>=C.first){if(C.fw.includes(dw))return easy(6);if(ro=='long')return{t:'long',lab:'Locker',km:8,d:'8 km ganz locker, Regenerationswoche.'};return rest}
- let L=V<30?Math.round(V*.25):Math.min(C.cap,Math.round(V*C.ls));
- if(w>=1&&w<=N&&C.tl[w-1]!=null)L=C.tl[w-1];
- const km=ro=='long'?L:Math.round(Math.max(0,V-L)*C.W[dw]);
- if(w==0&&ro=='long')return easy(Math.min(8,Math.max(4,Math.round(V*.15))),' + Steigerungsläufe');
- const Q=(l,k,t)=>({t:'q',lab:l,km:k,str,d:`${k} km gesamt: ${t}`});
- if(ro=='easy')return easy(km);
- if(ro=='str')return easy(km,' + 6 × 20 s Steigerungsläufe');
- if(ro=='q1'||ro=='q2'){const a=ro=='q1';
-  if(w>=T[0]||w==C.recov)return easy(km);
-  if(w>=T[1])return a?Q('Hügel',km,'locker, davon 8 × 60 s bergauf kräftig (Trabpause)'):Q('Fahrtspiel',km,`6 × 2 min zügig (${r(z.t)}), je 2 min locker`);
-  if(w>=T[2]){const n=6+(T[1]-1-w)%3;return a?Q('Intervalle',km,`Einlaufen + ${n} × 1000 m @ ${r(z.i)} (90 s Pause)`):Q('Tempo',km,`20 min @ ${r(z.t)} (Schwelle) im Lauf`)}
-  if(w>=T[3])return a?Q('Schwelle',km,`4 × 2 km @ ${r(z.t)} (2 min Pause)`):Q('Tempo-DL',km,`${Math.min(km-4,8+(T[2]-1)-w,14)} km @ ${r(z.t)}`);
-  if(w>=T[4])return a?Q('Intervalle',km,`5 × 1000 m @ ${r(z.i)} (90 s Pause)`):Q('Tempo-DL',km,`${Math.min(10,km-4)} km @ ${r(z.t)}`);
-  if(w>N){
-   if(short&&a){const seg=K>=20?2000:K>=8?1000:600,top=N+C.S,n0=K>=20?3+Math.floor((top-w)/3):K>=8?5+Math.floor((top-w)/2):6+Math.floor((top-w)/2),nmax=K>=20?6:K>=8?8:10;
-    const n=Math.max(2,Math.min(Math.min(nmax,n0),Math.floor((km-4)*1000/seg)));
-    return Q('Racepace',km,`Einlaufen + ${n} × ${seg} m @ ${r(rpace())} (${seg>=2000?'2 min':'90 s'} Pause)`)}
-   const m=Math.max(10,Math.min(20,Math.round(8+(N+C.S-w)*1.1)));return a?Q('MRT-Block',km,`${Math.min(m,km-4)} km @ ${r(z.mp)} in 2–3 Blöcken (1 km locker dazwischen)`):Q('Schwelle',km,`3 × 3 km @ ${r(z.t)} (2 min Pause)`)}
-  if(w>=1){if(short&&a)return Q('Racepace',km,`${w>=3?4:3} × 1000 m @ ${r(rpace())} (2 min Pause)`);return a?Q('MRT',km,`${w>=3?10:8} km @ ${r(z.mp)}`):Q('Schärfe',km,`5 × 1000 m @ ${r(z.i)}`)}
-  return a?Q('Aktivierung',km,`3 × 2 min @ ${r(short?rpace():z.mp)}`):easy(km,' + Steigerungsläufe')}
- if(w==C.test){const td=K>=15?10:5;return{t:'race',lab:'Testlauf',km:td+5,d:`Testwettkampf ${td} km (Ziel ca. ${ft(S.goal*Math.pow(td/42.195,1.06))}) plus Ein-/Auslaufen. Ergebnis unter „Leistung“ eintragen – danach passen sich alle Paces an.`}}
- if(w>=T[0]||w==C.recov)return{t:'long',lab:'Longrun',km:L,d:`${L} km locker @ ${r(z.e1)}–${r(z.e2)}`};
- if(!short&&w>N&&w<=N+C.S&&w%2==0){const m=Math.max(8,Math.min(22,Math.round(L*.55)));return{t:'long',lab:'Longrun MRT',km:L,d:`${L} km: locker, die letzten ${m} km @ ${r(z.mp)}`}}
- return{t:'long',lab:'Longrun',km:L,d:`${L} km @ ${r(z.e1)}–${r(z.e2)}${L>=28?' · Verpflegung üben':''}`}}
+ const C=CF();
+ if(C.mode=='maintain')return d<START||d>parse(S.race)?null:planM(d,na,C);
+ return dailyPlan({date:d,today,start:START,race:S.race,config:C,raceDistance:RD(),goal:S.goal,goalTime:GT(),zones:Z(d),weekFactor:WF(d),adaptationFactor:AD.f,withoutAdaptation:!!na})}
 /* ===== Vorbereitungswettkämpfe ===== */
 const TKL=km=>Math.abs(km-42.195)<.3?'Marathon':Math.abs(km-21.0975)<.3?'Halbmarathon':r1(km)+' km';
 const TKS=km=>Math.abs(km-42.195)<.3?'Marathon':Math.abs(km-21.0975)<.3?'HM':r1(km)+' km';
