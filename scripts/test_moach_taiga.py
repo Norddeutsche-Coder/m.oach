@@ -59,7 +59,7 @@ class ConstantsTest(unittest.TestCase):
         self.assertEqual(mt.LIVE_STATUSES, {"Abnahme", "Fertig", "Archiviert"})
 
     def test_app_url(self):
-        self.assertEqual(mt.APP_URL, "https://norddeutsche-coder.github.io/m.oach/")
+        self.assertEqual(mt.APP_URL, "https://m-oach.com/")
 
 
 class NewsRefsTest(unittest.TestCase):
@@ -339,7 +339,7 @@ class TextTemplatesTest(unittest.TestCase):
     def test_epic_news_text(self):
         self.assertEqual(mt.epic_news_text("Wochenlast", "Der Plan zeigt jetzt die Wochenlast."),
                          "🎉 **Wochenlast**\nDer Plan zeigt jetzt die Wochenlast.\n"
-                         "https://norddeutsche-coder.github.io/m.oach/")
+                         "https://m-oach.com/")
 
     def test_bug_news_text(self):
         self.assertEqual(mt.bug_news_text("Der Plan lädt wieder."), "Behoben: Der Plan lädt wieder.")

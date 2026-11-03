@@ -26,7 +26,7 @@ STATUS_RANK = {"In Arbeit": 0, "Im Test": 1, "Im Review": 2, "Abnahme": 3,
 QUESTION_HEADS = ("## Fachliche Fragen an @", "## Technische Fragen an @")
 RESOLVING_PREFIXES = ("Antworten", "Entschieden")
 
-APP_URL = "https://norddeutsche-coder.github.io/m.oach/"
+APP_URL = "https://m-oach.com/"
 LIVE_STATUSES = {"Abnahme", "Fertig", "Archiviert"}
 DISCORD_API = "https://discord.com/api/v10"
 DISCORD_GUILD_ID = "1561383271823315024"
