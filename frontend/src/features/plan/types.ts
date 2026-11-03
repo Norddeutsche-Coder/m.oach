@@ -110,3 +110,16 @@ export interface Prognosis {
   raw: number
   r: PaceRun
 }
+
+/** Strength weekdays (Monday = 0), plan start and race day as ISO dates. */
+export interface StrengthSchedule {
+  strD: readonly number[]
+  start: string
+  race: string
+}
+
+/** Strength session of a day: unit A or B and the number of sets. */
+export interface StrengthMeta {
+  s: 'A' | 'B'
+  n: 2 | 3
+}
