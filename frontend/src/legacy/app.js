@@ -8,6 +8,7 @@ import { adjust } from '../features/today/adjustment'
 import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
 import { longRunHint } from '../features/plan/wizard'
 import { strengthSession } from '../features/plan/strength'
+import { analyzeRun, runKind } from '../features/runs/analysis'
 import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
@@ -2102,46 +2103,7 @@ const KIND={easy:'Locker',q:'Qualität',long:'Longrun',race:'Wettkampf'},KCOL={e
 function rctx(runs,pf,useZ){
  const mx=runs.filter(r=>r.mx>0).map(r=>r.mx),hrmax=mx.length?Math.max(...mx):null;
  const pcs=runs.filter(r=>r.km>=3&&r.sec>0).map(r=>r.sec/r.km).sort((a,b)=>a-b),kms=runs.filter(r=>r.km>=3).map(r=>r.km).sort((a,b)=>a-b);
- return{runs,hrmax,pf,useZ,med:pcs.length?pcs[Math.floor(pcs.length/2)]:null,mkm:kms.length?kms[Math.floor(kms.length/2)]:null,k80:kms.length?kms[Math.floor(kms.length*.85)]:null}}
-function runKind(r,cx,p){
- if(p&&p.km&&p.t!='rest'&&KIND[p.t])return p.t;
- const pc=r.km>0&&r.sec>0?r.sec/r.km:null;
- if(cx.k80&&r.km>=Math.max(14,cx.k80*.95))return'long';
- if(pc&&cx.med&&r.km>=4&&pc<cx.med*.93)return'q';
- return'easy'}
-function analyzeRun(r,cx){
- const pc=r.km>0&&r.sec>0?r.sec/r.km:null,d=parse(r.d),p=cx.pf?cx.pf(d):null,kind=runKind(r,cx,p),z=cx.useZ?Z(d):null;
- const good=[],bad=[],nxt=[],note=[];
- const B=(k,t,n)=>{bad.push({k,t});if(n)nxt.push(n)};
- if(pc&&kind=='easy'){
-  if(z){if(pc>=z.e1*.97)good.push('Tempo im lockeren Bereich ('+fp(pc)+' /km)');else B('fast','Zu schnell für einen lockeren Lauf: '+fp(pc)+' statt '+fp(z.e1)+'–'+fp(z.e2)+' /km','Die ersten 3 km bewusst langsamer, im Gesprächstempo bleiben.')}
-  else if(cx.med&&pc<cx.med*.95)B('fast','Schneller als dein üblicher Schnitt ('+fp(pc)+' statt '+fp(cx.med)+' /km)','Lockere Läufe bewusst langsam beginnen.')}
- if(p&&p.km&&p.t!='rest'&&cx.pf){const q=r.km/p.km;
-  if(q>=.9&&q<=1.1)good.push('Umfang wie geplant ('+dec(r.km,1)+' von '+r1(p.km)+' km)');
-  else if(q>1.15)B('long','Länger als geplant: '+dec(r.km,1)+' statt '+r1(p.km)+' km','Den geplanten Umfang einhalten. Mehr bringt nicht automatisch mehr.');
-  else if(q<.8)B('short','Gekürzt: nur '+dec(r.km,1)+' von '+r1(p.km)+' km','Wenn du kürzen musst, lieber einen lockeren Lauf auslassen als die Qualität.')}
- if(p&&p.t=='rest'&&cx.pf)B('rest','Lauf an einem geplanten Ruhetag','Ruhetage einhalten: Dort passiert die Anpassung.');
- if(r.hr&&cx.hrmax){const pct=r.hr/cx.hrmax*100;
-  if(kind=='easy'){if(pct<=76)good.push('Puls entspannt ('+Math.round(pct)+' % der höchsten gemessenen Frequenz)');else if(pct>=83)B('hr','Puls hoch für einen lockeren Lauf ('+Math.round(pct)+' % der höchsten Frequenz)','Langsamer starten. Hitze, Müdigkeit, Koffein und Stress treiben den Puls.')}
-  else if(kind=='q'&&pct>=82)good.push('Intensität passend: Ø Puls '+Math.round(pct)+' % der höchsten Frequenz')}
- if(r.rpe>0){
-  if(kind=='easy'&&r.rpe>=7)B('rpe','Anstrengung '+r.rpe+'/10 ist für einen lockeren Lauf zu hoch','Gefühl über Tempo stellen: lockere Läufe dürfen sich leicht anfühlen.');
-  else if(kind=='easy'&&r.rpe<=4)good.push('Locker gelaufen (Anstrengung '+r.rpe+'/10)');
-  else if(r.rpe>=9)B('rpe','Sehr hart (Anstrengung '+r.rpe+'/10)','Danach ein lockerer oder freier Tag.')}
- const before=cx.runs.filter(x=>x.d<r.d&&x.d>=iso(addD(d,-42)));
- if(r.hr&&pc&&r.km>=4){const ef=x=>(1000/(x.sec/x.km))/x.hr,bs=before.filter(x=>x.hr&&x.km>=4&&x.sec>0).map(ef);
-  if(bs.length>=4){const e0=mean(bs),e1=ef(r),dl=(e1/e0-1)*100;
-   if(dl>=2.5)good.push('Effizienter als dein Schnitt: '+fmtPct(dl)+' Tempo pro Herzschlag');
-   else if(dl<=-5)B('eff','Weniger effizient als sonst ('+fmtPct(dl)+' Tempo pro Herzschlag)','Schlaf, Hitze und Flüssigkeit prüfen. Hängt es an, die Woche entschärfen.')}}
- if(r.ld){const ls=before.filter(x=>x.ld).map(x=>x.ld);if(ls.length>=4){const b=mean(ls);if(r.ld>b*1.5)B('load','Hohe Trainingslast ('+r.ld+', Ø '+Math.round(b)+')','Danach einen lockeren oder freien Tag einplanen.')}}
- let st=0;for(let i=1;i<=7;i++){if(cx.runs.some(x=>x.d==iso(addD(d,-i))))st++;else break}
- if(st>=5)B('streak',(st+1)+'. Lauftag in Folge','Einen freien Tag einplanen.');
- if(r.el&&r.km>0&&r.el/r.km>=15)note.push('Hügelig ('+Math.round(r.el/r.km)+' m pro km): Das Tempo ist nicht direkt mit flachen Läufen vergleichbar.');
- if(kind=='long'&&r.km>=18)nxt.push('Verpflegung wie im Wettkampf üben: ab Minute 40 alle 20–30 min rund 25 g Kohlenhydrate.');
- if(!good.length)good.push(r.manual?'Lauf eingetragen. Konstanz zählt.':'Lauf absolviert. Konstanz zählt.');
- if(!nxt.length)nxt.push(kind=='q'?'Morgen locker laufen oder frei. Die Qualität wirkt erst mit Erholung.':kind=='long'?'Heute Kohlenhydrate, Eiweiß und Schlaf priorisieren.':kind=='race'?'Ein paar lockere Tage, bevor du wieder Tempo läufst.':'Weiter so. Die nächste Einheit wie geplant.');
- const v=bad.length==0?{t:'Stark',c:'g'}:bad.length==1?{t:'Gut',c:'y'}:{t:'Achtung',c:'r'};
- return{kind,good:good.slice(0,3),bad:bad.slice(0,3),nxt:nxt.slice(0,3),note,v,pc}}
+ return{runs,hrmax,pf,zones:useZ?Z:null,med:pcs.length?pcs[Math.floor(pcs.length/2)]:null,mkm:kms.length?kms[Math.floor(kms.length/2)]:null,k80:kms.length?kms[Math.floor(kms.length*.85)]:null}}
 const BADL={fast:'zu schnell für lockere Läufe',long:'länger als geplant',short:'Einheiten gekürzt',rest:'Läufe an Ruhetagen',hr:'Puls zu hoch bei lockeren Läufen',rpe:'zu hohe Anstrengung',eff:'geringere Effizienz',load:'sehr hohe Trainingslast',streak:'viele Lauftage in Folge'};
 function weeklyKmRuns(runs,n){const o=[];for(let i=n-1;i>=0;i--){const ws=addD(mon(today),-7*i),a=iso(ws),b=iso(addD(ws,6));o.push({ws,v:runs.filter(r=>r.d>=a&&r.d<=b).reduce((s,r)=>s+r.km,0)})}return o}
 function lineSvg(pts,col,Wd,H,lbl){
