@@ -7,6 +7,7 @@ import { mountMap } from '../lib/map'
 import { adjust } from '../features/today/adjustment'
 import { buildCfg as buildPlanConfig, isDeload, phase, taperWeeks, volume } from '../features/plan/config'
 import { longRunHint } from '../features/plan/wizard'
+import { strengthSession } from '../features/plan/strength'
 import { fitP as fitPaces, expP as expectedPlanPace, Z as paceZones, progn as prognosis, tuneTarget as tuneTargetFor } from '../features/plan/paces'
 import { cloudStatesMatch, nextCloudRevision } from '../features/sync/conflict'
 import { supabaseConfig } from '../config/supabase'
@@ -155,7 +156,7 @@ function tuneOv(d,p){
    if(p.t=='q'||p.t=='long'||p.t=='race')return tuneSoft(d,Math.max(4,Math.min(10,Math.round(p.km*.65))),'Statt Qualität: Erholung nach dem Wettkampf ('+lab+').');
    return p}}
  return p}
-function planCur(d,na){const p=planCore(d,na),T=S.tune;let q=p;if(p&&T&&T.length&&iso(d)!=S.race&&p.lab!=RN())q=tuneOv(d,p);const q2=repOv(d,q);if(q2&&q2.str&&wtr(d)<1)return Object.assign({},q2,{str:''});if(q2&&q2.str){const m=krMeta(d);return Object.assign({},q2,{kr:m.s,krs:m.n,str:'Krafttraining nach dem Lauf, Einheit '+m.s+' ('+KSD[m.s]+'), 20–25 min'})}return q2}
+function planCur(d,na){const p=planCore(d,na),T=S.tune;let q=p;if(p&&T&&T.length&&iso(d)!=S.race&&p.lab!=RN())q=tuneOv(d,p);const q2=repOv(d,q);if(q2&&q2.str){const m=krMeta(d);if(!m)return Object.assign({},q2,{str:''});return Object.assign({},q2,{kr:m.s,krs:m.n,str:'Krafttraining nach dem Lauf, Einheit '+m.s+' ('+KSD[m.s]+'), 20–25 min'})}return q2}
 const defTaper=rd=>rd>40?3:rd>20?2:1;
 const tuneLimit=(race)=>iso(addD(parse(race),-14));
 const tuneSort=L=>L.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
@@ -554,9 +555,7 @@ function exSvg(id,big){
   +xFig(e.p[0],e.pr,0)+xFig(e.p[1],e.pr,124)+'</svg>'}
 const KSET={side:[2,2],plank:[2,2],bird:[2,2]},KSD={A:'Beine & Hüfte',B:'Stabilität & Rumpf'};
 const krSets=(id,n)=>(KSET[id]||[3,2])[n>=3?0:1];
-function krMeta(d){
- const C=CF(),sd=(C&&C.strD)||[],dw=(d.getDay()+6)%7,ix=Math.max(0,sd.indexOf(dw)),wk=Math.round((mon(d)-mon(START))/(7*D));
- const ss=sd.length>=2?(ix==0?'A':'B'):(wk%2==0?'A':'B');return{s:ss,n:wtr(d)<=3?2:3}}
+function krMeta(d){const C=CF();return strengthSession(d,{strD:(C&&C.strD)||[],start:iso(START),race:S.race})}
 function krTxt(k,n){return KSES[k].e.map(id=>EX[id].n).join(', ')}
 let KRX={s:'A',n:3};
 function krModal(h){const m=$('#im');m.hidden=false;m.innerHTML='<div class="box krbox">'+h+'</div>';m.onclick=e=>{if(e.target===m)m.hidden=true};const x=$('#krx');if(x)x.onclick=()=>{m.hidden=true}}
